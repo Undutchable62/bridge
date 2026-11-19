@@ -15,10 +15,10 @@
 @font-face{font-family:'PFD';src:local('Playfair Display Italic'),local('PlayfairDisplay-Italic');font-weight:100 900;font-style:italic}
 :root{--cw:80px;--ch:116px;--gold:#d4a72c;--paper:#fbf7ea;}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html{font-size:clamp(13px,calc(0.42vw + 0.5vh),30px)}
+html{font-size:calc(clamp(14px,calc(0.42vw + 0.5vh),30px) * var(--ui-scale,1))}
 html,body{height:100%;margin:0}
 body{background:#0a1a14;color:#f3efe2;font-family:'Inter','Noto Sans','Cantarell','DejaVu Sans',system-ui,sans-serif;overflow:hidden;user-select:none;-webkit-user-select:none}
-#app{display:grid;grid-template-columns:minmax(0,1fr) 24rem;grid-template-rows:auto minmax(0,1fr);height:100vh;height:100dvh;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
+#app{display:grid;grid-template-columns:minmax(0,1fr) calc(24rem / var(--ui-scale,1));grid-template-rows:auto minmax(0,1fr);height:100vh;height:100dvh;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
 html{background:#0a1a14;-webkit-text-size-adjust:100%}
 body{overscroll-behavior:none;touch-action:manipulation}
 #topbar{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.5rem 1.2rem;background:linear-gradient(#152b22,#0d1c16);border-bottom:1px solid rgba(212,167,44,.35)}
@@ -52,14 +52,14 @@ body{overscroll-behavior:none;touch-action:manipulation}
 .card.dim{filter:brightness(.6) saturate(.55)}
 .card.hint{box-shadow:0 0 0 3px #ffd54a,0 0 1.2rem .3rem rgba(255,213,74,.85);z-index:6}
 .card.win{box-shadow:0 0 0 3px #ffd54a,0 0 1.4rem .4rem rgba(255,213,74,.7)}
-.plate{display:inline-flex;gap:.45em;align-items:center;padding:.18em .85em;border-radius:999px;background:rgba(0,0,0,.38);font-weight:700;font-size:clamp(.78rem,calc(var(--cw)*.155),2.3rem);white-space:nowrap;border:1px solid rgba(255,255,255,.12)}
+.plate{display:inline-flex;gap:.45em;align-items:center;padding:.18em .85em;border-radius:999px;background:rgba(0,0,0,.38);font-weight:700;font-size:clamp(.78rem,calc(var(--cw)*.155*var(--ui-scale,1)),2.6rem);white-space:nowrap;border:1px solid rgba(255,255,255,.12)}
 .plate.vul{background:rgba(170,28,38,.82);border-color:rgba(255,150,150,.5)}
 .plate.turn{box-shadow:0 0 0 2px #ffd54a,0 0 .9rem #ffd54a}
 .plate .badge{background:#ffd54a;color:#3a2a00;border-radius:.4em;padding:0 .38em;font-size:.78em;font-weight:800}
 .plate .role{background:rgba(255,255,255,.18);border-radius:.4em;padding:0 .4em;font-size:.78em;font-weight:600}
-.count{font-size:clamp(.7rem,calc(var(--cw)*.13),1.8rem);color:#cfe3d6;opacity:.85}
+.count{font-size:clamp(.7rem,calc(var(--cw)*.13*var(--ui-scale,1)),2rem);color:#cfe3d6;opacity:.85}
 /* bidding */
-.bidpanel{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:calc(var(--cw)*.25);flex-wrap:wrap;font-size:clamp(.8rem,calc(var(--cw)*.19),2.6rem);padding:calc(var(--cw)*.08)}
+.bidpanel{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:calc(var(--cw)*.25);flex-wrap:wrap;font-size:clamp(.8rem,calc(var(--cw)*.19*var(--ui-scale,1)),2.9rem);padding:calc(var(--cw)*.08)}
 .auction{background:rgba(0,0,0,.32);border-radius:.8em;padding:.5em .7em;border:1px solid rgba(255,255,255,.12);min-width:12em}
 .auction table{border-collapse:collapse;width:100%}
 .auction th{font-weight:700;padding:.15em .5em;border-bottom:1px solid rgba(255,255,255,.25);font-size:.9em}
@@ -77,7 +77,7 @@ body{overscroll-behavior:none;touch-action:manipulation}
 .b-pass{background:#2f8f4e!important}.b-x{background:#c0392b!important}.b-xx{background:#2c5aa0!important}
 .bidstatus{text-align:center;margin-top:.4em;font-size:.82em;color:#e9f1ea;min-height:1.3em}
 .watermark{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-family:'Playfair Display','PFD',Georgia,serif;font-weight:800;font-size:calc(var(--cw)*.55);color:rgba(255,255,255,.13);pointer-events:none;white-space:nowrap}
-.donebox{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.7em;font-size:clamp(.9rem,calc(var(--cw)*.2),2.6rem)}
+.donebox{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.7em;font-size:clamp(.9rem,calc(var(--cw)*.2*var(--ui-scale,1)),2.9rem)}
 /* sidebar */
 #sidebar{overflow-y:auto;padding:.7rem .8rem 1rem .2rem;min-height:0}
 .panel{background:rgba(255,255,255,.045);border:1px solid rgba(212,167,44,.25);border-radius:1rem;padding:.7rem .9rem;margin-bottom:.7rem}
@@ -122,9 +122,9 @@ body{overscroll-behavior:none;touch-action:manipulation}
 .setrow select,.setrow input{font:inherit;transform:scale(1.25)}
 .setrow select{transform:none;padding:.3rem .5rem;border-radius:.4rem;border:1px solid #c9bf9f}
 
-.stepbtn{position:absolute;right:calc(var(--cw)*.35 + 1rem);bottom:calc(var(--ch)*1.45 + 1rem);z-index:20;font:inherit;font-weight:800;font-size:clamp(.95rem,calc(var(--cw)*.17),2.4rem);padding:.6em 1.1em;border-radius:1em;border:2px solid #f0d27a;background:linear-gradient(#e0b640,#b78d1c);color:#2b1f00;box-shadow:0 .4rem 1.2rem rgba(0,0,0,.5);cursor:pointer;display:flex;flex-direction:column;align-items:center;line-height:1.15}
+.stepbtn{position:absolute;right:calc(var(--cw)*.35 + 1rem);bottom:calc(var(--ch)*1.45 + 1rem);z-index:20;font:inherit;font-weight:800;font-size:clamp(.95rem,calc(var(--cw)*.17*var(--ui-scale,1)),2.6rem);padding:.6em 1.1em;border-radius:1em;border:2px solid #f0d27a;background:linear-gradient(#e0b640,#b78d1c);color:#2b1f00;box-shadow:0 .4rem 1.2rem rgba(0,0,0,.5);cursor:pointer;display:flex;flex-direction:column;align-items:center;line-height:1.15}
 .stepbtn small{font-size:.65em;font-weight:600}
-.trickmsg{position:absolute;left:50%;bottom:2%;transform:translateX(-50%);font-size:clamp(.75rem,calc(var(--cw)*.14),1.8rem);color:#ffe08a;font-weight:700;white-space:nowrap;text-shadow:0 1px 3px #000}
+.trickmsg{position:absolute;left:50%;bottom:2%;transform:translateX(-50%);font-size:clamp(.75rem,calc(var(--cw)*.14*var(--ui-scale,1)),2rem);color:#ffe08a;font-weight:700;white-space:nowrap;text-shadow:0 1px 3px #000}
 .explainpanel{border-color:rgba(255,213,74,.6);background:rgba(255,213,74,.07)}
 #explainBody{font-size:.86rem;line-height:1.4}
 #explainBody>div{margin:.2rem 0}
@@ -162,6 +162,10 @@ a.btn{text-decoration:none}
 .advset{margin-top:.8rem;border:1px solid #e3d9bd;border-radius:.6rem;padding:.4rem .7rem}
 .advset summary{cursor:pointer;color:#6b5a2a}
 .advset h4{margin-top:.4rem}
+#topbar{flex-wrap:wrap;row-gap:.3rem}
+.topstats{flex-wrap:wrap;row-gap:.3rem;justify-content:flex-end}
+html.bigtext .brand small{display:none}
+html.bigtext .topstats>span:nth-child(3){display:none}
 #toast{position:fixed;left:50%;bottom:6vh;transform:translateX(-50%);background:rgba(20,20,20,.9);color:#fff;padding:.6rem 1.1rem;border-radius:.8rem;font-weight:600;opacity:0;transition:opacity .25s;pointer-events:none;z-index:60;font-size:1rem}
 #toast.show{opacity:1}
 @media (max-aspect-ratio:1/1),(max-width:900px){
@@ -658,7 +662,7 @@ function simulateTable(deal,board,rng){
 "use strict";
 (function(){
 const $=id=>document.getElementById(id);
-const DEFAULTS={felt:'#16703f',deck:'knoll',dutchAces:false,backColor:'red',fourColor:false,speed:'normal',favorNS:true,coachAuto:true};
+const DEFAULTS={uiScale:1,felt:'#16703f',deck:'knoll',dutchAces:false,backColor:'red',fourColor:false,speed:'normal',favorNS:true,coachAuto:true};
 function loadSettings(){try{const s=JSON.parse(localStorage.getItem('hbt-settings')||'{}');return Object.assign({},DEFAULTS,s);}catch(e){return Object.assign({},DEFAULTS);}}
 function saveSettings(){try{localStorage.setItem('hbt-settings',JSON.stringify(S));}catch(e){}}
 const S=loadSettings();
@@ -671,6 +675,8 @@ function applyFelt(){
   st.setProperty('--felt',c);st.setProperty('--felt-hi',mixHex(c,'w',0.18));st.setProperty('--felt-lo',mixHex(c,'b',0.38));
 }
 applyFelt();
+function applyScale(){let v=+S.uiScale||1;if(v<0.8||v>1.6)v=1;document.documentElement.style.setProperty('--ui-scale',String(v));document.documentElement.classList.toggle('bigtext',v>=1.15);}
+applyScale();
 
 const FIELD=24;
 const SPEEDS={slow:{bid:1100,play:1000,trick:1900},normal:{bid:700,play:650,trick:1300},fast:{bid:320,play:300,trick:650}};
@@ -1413,7 +1419,7 @@ function renderSeats(){
 }
 function renderCenter(){
   const el=$('center');
-  if(T.phase==='bidding'){el.innerHTML=biddingHTML();return;}
+  if(T.phase==='bidding'){el.innerHTML=biddingHTML();fitBidding(el);return;}
   if(T.phase==='done'){
     const r=T.result,ns=MYSEAT%2===0,sc=r?(ns?r.scoreNS:-r.scoreNS):0,pct=r?(ns?r.pct:100-r.pct):50;
     el.innerHTML=`<div class="donebox"><div style="font-family:'Playfair Display','PFD',Georgia,serif;font-weight:800;font-size:1.6em">${r&&r.ct?colorize(contractText(r.ct)+' '+SEAT_SHORT[r.ct.declarer]+' '+resultText(r.ct,r.tricks),true):'Gepast spel'}</div><div>Jouw score: <b>${sc>0?'+':''}${sc}</b> · <b>${pct.toFixed(2)}%</b></div><div style="display:flex;gap:.6em;flex-wrap:wrap;justify-content:center"><button class="btn primary" data-act="next">Volgend spel ▶</button><button class="btn" data-act="result">Uitslag</button><button class="btn" data-act="review">🔍 Nabespreking</button></div></div>`;
@@ -1430,6 +1436,11 @@ function renderCenter(){
   ps.trick.forEach((t,i)=>{const[x,y]=pos[slotOf(t.seat)];o+=`<div class="card ${t.seat===win?'win':''}" style="position:absolute;left:${x}px;top:${y}px;width:${w}px;height:${h}px;z-index:${i+1}">${cardSVG(t.card)}</div>`;});
   if(done)o+=`<div class="trickmsg">${whoText(win)} wint de slag${isHost()&&!LOCAL.step?' · tik om door te gaan':''}</div>`;
   el.innerHTML=o;
+}
+function fitBidding(el){
+  const bp=el.querySelector('.bidpanel');if(!bp)return;bp.style.fontSize='';
+  let fs=parseFloat(getComputedStyle(bp).fontSize)||14,g=0;const H=el.clientHeight,W=el.clientWidth;
+  while(g++<30&&fs>8&&(bp.scrollHeight>H+1||bp.scrollWidth>W+1)){fs*=0.94;bp.style.fontSize=fs+'px';}
 }
 function biddingHTML(){
   const a=toArr(T.auction),dealer=dealerOf(T.board),v=vulOf(T.board);
@@ -1968,6 +1979,7 @@ function showTips(){
 function showSettings(){
   const cfgTxt=(()=>{try{return localStorage.getItem('hbt-fbconfig')||'';}catch(e){return'';}})();
   openModal('⚙ Instellingen',`<div class="setrow" style="flex-wrap:wrap"><label>Kleur speellaken</label><div class="feltrow">${FELTS.map(([n,c])=>`<button class="feltsw ${String(S.felt).toLowerCase()===c?'on':''}" data-set="felt" data-color="${c}" title="${n}" aria-label="${n}" style="background:radial-gradient(circle at 40% 35%,${mixHex(c,'w',0.2)},${c} 60%,${mixHex(c,'b',0.35)})"></button>`).join('')}<label class="feltpick" title="Eigen kleur kiezen">🎨<input type="color" id="feltc" value="${esc(S.felt||'#16703f')}"></label></div></div>
+<div class="setrow"><label for="sz">Tekstgrootte</label><select id="sz">${[[0.9,'Klein'],[1,'Normaal'],[1.15,'Groot'],[1.3,'Extra groot'],[1.45,'Heel groot']].map(([v,n])=>`<option value="${v}" ${(+S.uiScale||1)===v?'selected':''}>${n}</option>`).join('')}</select></div>
 <div class="setrow"><label for="sd">Kaartontwerp</label><select id="sd"><option value="knoll" ${S.deck!=='eigen'?'selected':''}>Klassiek (Byron Knoll)</option><option value="eigen" ${S.deck==='eigen'?'selected':''}>Hollandse tekeningen</option></select></div>
 <div class="setrow"><label for="sa">Azen met Nederlandse gebouwen</label><input type="checkbox" id="sa" ${S.dutchAces?'checked':''}></div>
 <div class="setrow"><label for="s4">Vierkleurige kaarten (<span style="color:#13723a">♣︎</span> groen, <span style="color:#d9650b">♦︎</span> oranje)</label><input type="checkbox" id="s4" ${S.fourColor?'checked':''}></div>
@@ -1982,6 +1994,7 @@ ${(!window.HBT_FIREBASE_CONFIG||isAdmin())?`<details class="advset"><summary><b>
 </details>`:''}<p style="font-size:.85rem;color:#6b5a2a">Klassieke kaarten: Byron Knoll, <i>Vector Playing Cards</i> (public domain). De instellingen worden in deze browser bewaard.</p>`);
   const upd=()=>{S.fourColor=$('s4').checked;S.coachAuto=$('sc').checked;S.favorNS=$('sf').checked;S.speed=$('ss').value;S.backColor=$('sb').value;S.deck=$('sd').value;S.dutchAces=$('sa').checked;saveSettings();resetCardImages();renderCoach();render();};
   ['sd','sa','s4','sb','sc','sf','ss'].forEach(id=>$(id).addEventListener('change',upd));
+  $('sz').addEventListener('change',e=>{S.uiScale=+e.target.value||1;saveSettings();applyScale();setTimeout(onResize,50);});
   $('feltc').addEventListener('input',e=>{S.felt=e.target.value;applyFelt();saveSettings();document.querySelectorAll('.feltsw').forEach(b=>b.classList.remove('on'));});
 }
 function setAction(n,el){
