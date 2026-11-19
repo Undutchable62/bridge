@@ -1,26 +1,18 @@
-/* De Hollandse Bridgetafel – instellingen voor de online versie
-   Pas hieronder de drie onderdelen aan. Laat de aanhalingstekens en puntkomma's staan. */
+/* De Hollandse Bridgetafel – instellingen voor de online versie */
 
-/* 1. Jouw e-mailadres als beheerder. Met dit adres keur je nieuwe spelers goed.
-      Gebruik precies hetzelfde adres als waarmee je in de app inlogt. */
+/* 1. Beheerder: met dit e-mailadres keur je nieuwe spelers goed. */
 window.HBT_ADMIN_EMAIL = "games@thewinegumfactory.nl";
 
-/* 2. Je bunq.me-adres voor een vrijwillige bijdrage, bijvoorbeeld "https://bunq.me/JOUWNAAM".
-      Laat leeg ("") als je geen bijdrage-knop wilt. */
-window.HBT_DONATE_URL = "";
+/* 2. Vrijwillige bijdrage via bunq.me */
+window.HBT_DONATE_URL = "https://bunq.me/MartinvanWijngaarden";
 
-/* 3. De Firebase-gegevens (Projectinstellingen → Jouw apps → firebaseConfig).
-      Laat op null staan als je (nog) geen online functies gebruikt. */
-window.HBT_FIREBASE_CONFIG = null;
-
-/* Voorbeeld voor onderdeel 3 (vervang alles door JOUW gegevens):
+/* 3. Firebase-gegevens (project hollandse-bridge) */
 window.HBT_FIREBASE_CONFIG = {
-  apiKey: "AIza....",
+  apiKey: "AIzaSyA2b8mxJAYr7rrIe8XAgaIdSskcl5DHiac",
   authDomain: "hollandse-bridge.firebaseapp.com",
   databaseURL: "https://hollandse-bridge-default-rtdb.europe-west1.firebasedatabase.app",
   projectId: "hollandse-bridge",
-  storageBucket: "hollandse-bridge.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abcdef"
+  storageBucket: "hollandse-bridge.firebasestorage.app",
+  messagingSenderId: "915536401174",
+  appId: "1:915536401174:web:0caa221eb4afae603cf637"
 };
-*/
