@@ -159,6 +159,9 @@ a.btn{text-decoration:none}
 .feltsw.on{box-shadow:0 0 0 3px #c9a844}
 .feltpick{position:relative;width:2.3rem;height:2.3rem;border-radius:50%;border:2px dashed #b9ad8a;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:1.1rem}
 .feltpick input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.advset{margin-top:.8rem;border:1px solid #e3d9bd;border-radius:.6rem;padding:.4rem .7rem}
+.advset summary{cursor:pointer;color:#6b5a2a}
+.advset h4{margin-top:.4rem}
 #toast{position:fixed;left:50%;bottom:6vh;transform:translateX(-50%);background:rgba(20,20,20,.9);color:#fff;padding:.6rem 1.1rem;border-radius:.8rem;font-weight:600;opacity:0;transition:opacity .25s;pointer-events:none;z-index:60;font-size:1rem}
 #toast.show{opacity:1}
 @media (max-aspect-ratio:1/1),(max-width:900px){
@@ -1972,11 +1975,11 @@ function showSettings(){
 <div class="setrow"><label for="sc">Coach geeft automatisch biedadvies</label><input type="checkbox" id="sc" ${S.coachAuto?'checked':''}></div>
 <div class="setrow"><label for="sf">Gunstige delingen voor Noord-Zuid (alleen spelen)</label><input type="checkbox" id="sf" ${S.favorNS?'checked':''}></div>
 <div class="setrow"><label for="ss">Speelsnelheid computer</label><select id="ss"><option value="slow" ${S.speed==='slow'?'selected':''}>Langzaam</option><option value="normal" ${S.speed==='normal'?'selected':''}>Normaal</option><option value="fast" ${S.speed==='fast'?'selected':''}>Snel</option></select></div>
-<h4>Online (Firebase)</h4>
+${(!window.HBT_FIREBASE_CONFIG||isAdmin())?`<details class="advset"><summary><b>Geavanceerd (beheerder)</b> – online koppeling</summary><h4>Online (Firebase)</h4>
 <p class="ex-note">${window.HBT_FIREBASE_CONFIG?'De configuratie wordt uit <code>config.js</code> gelezen. ':''}Status: <b>${CLOUD?(CLOUD.kind==='test'?'testdatabase':'verbonden'):'niet ingesteld'}</b>. Plak hieronder de <code>firebaseConfig</code> uit de Firebase-console als je dit apparaat zonder <code>config.js</code> wilt koppelen (bijv. het losse bestand op de pc).</p>
 <textarea id="fbcfg" class="inp" rows="5" style="width:100%;font-family:monospace;font-size:.8rem" placeholder="const firebaseConfig = { apiKey: &quot;…&quot;, authDomain: &quot;…&quot;, databaseURL: &quot;…&quot;, projectId: &quot;…&quot;, … };">${esc(cfgTxt)}</textarea>
 <div class="mbtns"><button class="btn" data-set="savecfg">Configuratie opslaan en herladen</button>${cfgTxt?'<button class="btn" data-set="clearcfg">Configuratie wissen</button>':''}</div>
-<p style="font-size:.85rem;color:#6b5a2a">Klassieke kaarten: Byron Knoll, <i>Vector Playing Cards</i> (public domain). De instellingen worden in deze browser bewaard.</p>`);
+</details>`:''}<p style="font-size:.85rem;color:#6b5a2a">Klassieke kaarten: Byron Knoll, <i>Vector Playing Cards</i> (public domain). De instellingen worden in deze browser bewaard.</p>`);
   const upd=()=>{S.fourColor=$('s4').checked;S.coachAuto=$('sc').checked;S.favorNS=$('sf').checked;S.speed=$('ss').value;S.backColor=$('sb').value;S.deck=$('sd').value;S.dutchAces=$('sa').checked;saveSettings();resetCardImages();renderCoach();render();};
   ['sd','sa','s4','sb','sc','sf','ss'].forEach(id=>$(id).addEventListener('change',upd));
   $('feltc').addEventListener('input',e=>{S.felt=e.target.value;applyFelt();saveSettings();document.querySelectorAll('.feltsw').forEach(b=>b.classList.remove('on'));});
