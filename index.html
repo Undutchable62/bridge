@@ -177,6 +177,9 @@ html.bigtext .topstats>span:nth-child(3){display:none}
   .brand small{display:none}
   .fslbl{display:none}
 }
+.alerted{cursor:pointer;border-bottom:2px dotted #e8b33a}
+.alerted sup{font-size:.6em;color:#e8b33a;margin-left:1px}
+.alertb{display:inline-block;background:#e8b33a;color:#2a1d00;border-radius:4px;padding:0 .3em;font-size:.8em;font-weight:700}
 </style>
 </head>
 <body>
@@ -313,7 +316,7 @@ function callText(c){if(!c)return'';if(c.type==='pass')return'Pas';if(c.type==='
 function contractOf(a){
   const lb=lastBidCall(a);if(!lb)return null;let dbl=0;const idx=a.lastIndexOf(lb);
   for(let i=idx+1;i<a.length;i++){if(a[i].type==='x')dbl=1;if(a[i].type==='xx')dbl=2;}
-  const side=lb.seat%2;const first=a.find(c=>c.type==='bid'&&c.seat%2===side&&c.strain===lb.strain);
+  const side=lb.seat%2;const same=c=>c.type==='bid'&&c.seat%2===side&&c.strain===lb.strain;const first=a.find(c=>same(c)&&(!c.art||c.nat))||a.find(same);
   return{level:lb.level,strain:lb.strain,dbl,declarer:first?first.seat:lb.seat};
 }
 function contractText(ct){if(!ct)return'Gepast';return ct.level+sym(ct.strain)+(ct.dbl===1?'X':ct.dbl===2?'XX':'');}
@@ -331,6 +334,7 @@ function interpret(a){
   let opener=-1,openCall=null;
   for(let i=0;i<a.length;i++){
     const c=a[i],k=K[c.seat],partner=(c.seat+2)%4,p=K[partner];
+    if(c.art){const sh=c.sh||{};if(sh.min!==undefined)k.min=Math.max(k.min,sh.min);if(sh.max!==undefined)k.max=Math.max(k.min,Math.min(k.max,sh.max));if(sh.len)for(const q of Object.keys(sh.len))k.len[+q]=Math.max(k.len[+q],sh.len[q]);if(sh.bal)k.bal=true;if(c.type==='bid'){if(opener<0){opener=c.seat;openCall=c;k.opened=true;}k.bids++;}continue;}
     if(c.type!=='bid'){if(c.type==='pass'&&opener<0)k.max=Math.min(k.max,11);continue;}
     const s=c.strain,L=c.level;
     const setLen=n=>{if(s<4)k.len[s]=Math.max(k.len[s],n);};
@@ -383,8 +387,8 @@ function openSuit(L){
   if(L[3]>=5||L[2]>=5)return L[3]>=L[2]?3:2;
   if(L[1]>L[0])return 1;if(L[0]>L[1])return 0;return L[0]===3?0:1;
 }
-function aiBid(st,seat,jit){
-  jit=jit||0;
+function aiBid(st,seat,jit,opts){
+  jit=jit||0;const ADV=!!(opts&&opts.adv);
   const a=st.auction,h=st.hands[seat],ev=evaluate(h),L=ev.len;
   const hcp=Math.max(0,ev.hcp+jit);
   const partner=(seat+2)%4;
@@ -435,7 +439,7 @@ function aiBid(st,seat,jit){
   }
   // 3. Partner heeft geboden
   const opening=bids[0];
-  if(!myBids.length&&opening.seat===partner&&partnerBids.length===1){
+  if(!myBids.length&&opening.seat===partner&&partnerBids.length===1&&!(ADV&&opening.art)){
     const o=opening;
     if(o.strain===4&&o.level===1){
       const maj=L[3]>=5&&L[3]>=L[2]?3:(L[2]>=5?2:-1);
@@ -471,7 +475,6 @@ function aiBid(st,seat,jit){
   // Algemene logica: schat de gezamenlijke kracht en zoek een fit
   const pMin=pk.min,pMax=Math.min(pk.max,pk.min+9);
   const pEst=pMin+Math.min(2,Math.floor((pMax-pMin)/2));
-  const comb=hcp+pEst;
   let fit=-1;
   for(const s of [3,2,1,0]){
     if(pk.len[s]>0&&L[s]+pk.len[s]>=8){
@@ -479,6 +482,14 @@ function aiBid(st,seat,jit){
       else if((fit>=2)===(s>=2)&&L[s]+pk.len[s]>L[fit]+pk.len[fit])fit=s;
     }
   }
+  let myPts=hcp;
+  if(ADV){
+    const np=a.filter(c=>c.type!=='pass');
+    const pS=[...new Set(np.filter(c=>c.seat===partner&&c.type==='bid'&&(!c.art||c.nat)&&c.strain<4).map(c=>c.strain))];
+    const oS=[...new Set(np.filter(c=>c.seat%2!==seat%2&&c.type==='bid'&&(!c.art||c.nat)&&c.strain<4).map(c=>c.strain))];
+    myPts=Math.max(0,advPoints(h,L,hcp,fit,pk.len,pS,oS));
+  }
+  const comb=myPts+pEst;
   const ourLast=lb.seat%2===seat%2;
   const lbIdx=bidIdx(lb.level,lb.strain);
   let target=null,why='';
@@ -489,6 +500,14 @@ function aiBid(st,seat,jit){
     else{target=[3,4];why=`Samen ongeveer ${comb} punten zonder fit in een hoge kleur: de manche 3SA.`;}
   }else if(comb>=23){
     target=fit>=2?[3,fit]:[2,4];why=`Samen ongeveer ${comb} punten: net onder de manche, dus uitnodigen.`;
+  }
+  if(ADV&&fit>=0){
+    const np=a.filter(c=>c.type!=='pass'),ours=np.filter(c=>c.seat%2===seat%2);
+    const agreed=agreedTrump(ours,seat)===fit,asked=ours.some(c=>c.rk!==undefined||c.rkr!==undefined||c.gerber),cued=ours.some(c=>c.cue!==undefined);
+    if(target&&target[0]===6&&agreed&&!asked&&ok(4,4))return B(4,4,`Samen ongeveer ${comb} punten en een fit in ${SN[fit]}: vraag eerst naar de sleutelkaarten met RKCB 4SA.`);
+    if(!target||target[0]<6){
+      if(fit>=2&&agreed&&!asked&&!cued&&comb>=31&&comb<33&&myBids.length>=1){for(const s of [0,1,2]){if(s===fit||bidIdx(4,s)>=bidIdx(4,fit)||!ok(4,s))continue;if(h.some(c=>c.s===s&&c.r===14))return B(4,s,`Samen ongeveer ${comb} punten: misschien slem. Controlebod 4${N(s)} laat je aas ${SN[s]} zien.`);}}
+    }
   }
   if(target){
     const ti=bidIdx(target[0],target[1]);
@@ -502,7 +521,7 @@ function aiBid(st,seat,jit){
   // Gedwongen herbod van de openaar na een nieuwe kleur van partner
   if(opening.seat===seat&&myBids.length===1&&partnerBids.length===1&&lb.seat===partner){
     const pr=partnerBids[0],ps=pr.strain,os=opening.strain;
-    if(ps<4&&ps!==os&&os<4){
+    if(ps<4&&ps!==os&&os<4&&!pr.art&&!opening.art){
       if(L[ps]>=4){const l=cheapest(ps);if(l<=2)return B(l,ps,`Je hebt 4 kaarten steun voor partners ${SN[ps]}: verhoog naar ${l}${N(ps)} (minimum opening).`);}
       if(ev.bal&&ok(1,4))return B(1,4,`Evenwichtige minimumhand (12-14 punten): herbied 1SA.`);
       for(const s of [0,1,2,3]){if(s!==os&&s!==ps&&L[s]>=4){const l=cheapest(s);if(l===1||(l===2&&s<os))return B(l,s,`Laat je tweede kleur zien: ${l}${N(s)}.`);}}
@@ -511,10 +530,417 @@ function aiBid(st,seat,jit){
     }
   }
   if(ourLast)return P(`Deelscore: ${callText(lb)} is een prima contract. Pas.`);
-  if(fit>=0){const l=cheapest(fit),tot=L[fit]+pk.len[fit];if(l<=2||(l===3&&tot>=9))return B(l,fit,`Strijd om de deelscore: samen hebben jullie ${tot} ${SN[fit]}. Bied ${l}${N(fit)}.`);}
+  if(fit>=0){const l=cheapest(fit),tot=L[fit]+pk.len[fit];if(ADV){if(lb.strain<4&&lb.level<=3&&l<=Math.min(3,tot-6))return B(l,fit,`Wet van de Totale Slagen: samen ${tot} ${SN[fit]}, dus je mag concurreren tot ${tot-6}${N(fit)}. Bied ${l}${N(fit)}.`);}else if(l<=2||(l===3&&tot>=9))return B(l,fit,`Strijd om de deelscore: samen hebben jullie ${tot} ${SN[fit]}. Bied ${l}${N(fit)}.`);}
   for(const s of [3,2,1,0])if(L[s]>=6&&hcp>=8){const l=cheapest(s);if(l<=2)return B(l,s,`Een zeskaart ${SN[s]}: bied je kleur (${l}${N(s)}).`);}
   return P(`Niet genoeg kracht om verder te bieden. Pas.`);
 }
+/* ======================================================================
+   BIEDSYSTEEM GEVORDERD
+   Multi 2♦ + Muiderberg, 2♣ sterk, Stayman, Jacoby, Texas, Gerber,
+   splinter, vierde kleur, Checkback, RKCB 1430, controlebod,
+   negatief doublet, informatiedoublet, Michaels, Unusual 2SA, Landy,
+   verdelingspunten en de Wet van de Totale Slagen.
+   ====================================================================== */
+const SPLINTERS={2:[[3,3],[4,0],[4,1]],3:[[4,0],[4,1],[4,2]]};
+function isSplinterBid(M,l,s){return (SPLINTERS[M]||[]).some(([a,b])=>a===l&&b===s);}
+function aceCount(h){return h.filter(c=>c.r===14).length;}
+function keycards(h,t){return aceCount(h)+(h.some(c=>c.s===t&&c.r===13)?1:0);}
+function hasTrumpQ(h,t){return h.some(c=>c.s===t&&c.r===12);}
+function ltc(h){let t=0;for(let s=0;s<4;s++){const cs=h.filter(c=>c.s===s),n=Math.min(3,cs.length),has=r=>cs.some(c=>c.r===r);let l=n;if(n>=1&&has(14))l--;if(n>=2&&has(13))l--;if(n>=3&&has(12))l--;t+=l;}return t;}
+function hasControl(h,s){const cs=h.filter(c=>c.s===s);return cs.length<=1||cs.some(c=>c.r>=13);}
+/* Wat heeft een speler met zijn biedingen 'genoemd'? (natuurlijke kleuren + kleuren die een conventie belooft) */
+function namedSuits(calls){const n=new Set();for(const c of calls){if(c.type!=='bid')continue;if(!c.art&&c.strain<4)n.add(c.strain);if(c.sh&&c.sh.len)for(const k of Object.keys(c.sh.len))if(c.sh.len[k]>=2)n.add(+k);}return n;}
+function agreedTrump(calls,seatA){
+  const a=calls.filter(c=>c.seat===seatA),b=calls.filter(c=>c.seat===(seatA+2)%4);
+  const na=namedSuits(a),nb=namedSuits(b);let t=-1;
+  for(const c of calls){if(c.type!=='bid')continue;const cand=[];if(!c.art&&c.strain<4)cand.push(c.strain);if(c.sh&&c.sh.len)for(const k of Object.keys(c.sh.len))cand.push(+k);for(const s of cand)if(na.has(s)&&nb.has(s))t=s;}
+  return t;
+}
+/* Kunstmatige betekenis van een bod, bepaald uit de plaats in de bieding.
+   Geeft {art, alert, sh:{min,max,len,bal}, so?, rk?, ...} of null (natuurlijk). */
+function annotate(a,c){
+  if(!c||c.type==='pass'||c.type==='xx')return null;
+  const seat=c.seat,partner=(seat+2)%4;
+  const nonPass=a.filter(x=>x.type!=='pass'),bids=a.filter(x=>x.type==='bid');
+  const ours=nonPass.filter(x=>x.seat%2===seat%2),opp=nonPass.filter(x=>x.seat%2!==seat%2);
+  const mine=nonPass.filter(x=>x.seat===seat),pard=nonPass.filter(x=>x.seat===partner);
+  const last=nonPass[nonPass.length-1];
+  const isBid=c.type==='bid',L=c.level,S=c.strain,N=sym;
+  const R=(alert,sh,extra)=>Object.assign({art:true,alert,sh:sh||{}},extra||{});
+  if(isBid&&!bids.length){
+    if(L===2&&S===0)return R('Sterk: 22+ punten of 9 vaste slagen; mancheforcing',{min:20});
+    if(L===2&&S===1)return R('Multi: zwakke zeskaart harten óf schoppen (6-10 punten)',{min:6,max:10},{multi:true});
+    if(L===2&&(S===2||S===3))return R(`Muiderberg: vijfkaart ${N(S)} + vier- of vijfkaart lage kleur, 6-10 punten`,{min:6,max:10,len:{[S]:5}},{muid:true,nat:true});
+    return null;
+  }
+  if(!bids.length)return null;
+  const open=bids[0],noInt=opp.filter(x=>nonPass.indexOf(x)>nonPass.indexOf(open)).length===0&&opp.indexOf(open)<0;
+  // --- antwoorden op 1SA / 2SA van partner ---
+  if(isBid&&open.seat===partner&&open.strain===4&&(open.level===1||open.level===2)&&!mine.length&&last===open){
+    const st=open.level;
+    if(L===st+1&&S===0)return R('Stayman: vraagt naar een vierkaart harten of schoppen',{min:st===1?8:4},{stay:true});
+    if(L===st+1&&S===1)return R('Transfer: belooft 5+ harten (partner biedt nu ♥)',{len:{2:5}},{tr:2});
+    if(L===st+1&&S===2)return R('Transfer: belooft 5+ schoppen (partner biedt nu ♠)',{len:{3:5}},{tr:3});
+    if(L===4&&S===0)return R('Gerber: vraagt naar het aantal azen',{min:st===1?16:12},{gerber:true});
+    if(st===1&&L===4&&S===1)return R('Texas: 6+ harten, manche zonder slemambitie',{len:{2:6},min:10,max:15},{tex:2});
+    if(st===1&&L===4&&S===2)return R('Texas: 6+ schoppen, manche zonder slemambitie',{len:{3:6},min:10,max:15},{tex:3});
+  }
+  // --- de openaar antwoordt op Stayman / transfer / Texas / Gerber ---
+  if(isBid&&open.seat===seat&&open.strain===4&&mine.length===1&&pard.length===1&&last===pard[0]&&pard[0].art){
+    const p=pard[0],st=open.level;
+    if(p.stay&&L===st+1){if(S===1)return R('Antwoord op Stayman: geen vierkaart hoog',{});if(S===2)return R('Antwoord op Stayman: vierkaart harten (mogelijk ook vier schoppen)',{len:{2:4}},{nat:true});if(S===3)return R('Antwoord op Stayman: vierkaart schoppen, geen vier harten',{len:{3:4}},{nat:true});}
+    if(p.tr!==undefined&&S===p.tr){if(L===st+1)return R('Transfer uitgevoerd',{len:{[S]:2}},{nat:true});if(L===st+2)return R('Super-accept: vierkaart steun en een maximum',{len:{[S]:4},min:17},{nat:true});}
+    if(p.tex!==undefined&&S===p.tex&&L===4)return R('Texas uitgevoerd',{len:{[S]:2}},{so:true,nat:true});
+    if(p.gerber&&L===4){const m={1:'0 of 4',2:'1',3:'2',4:'3'};if(m[S])return R(`Antwoord op Gerber: ${m[S]} azen`,{},{gr:S});}
+  }
+  if(isBid&&L===4&&S===4&&mine.length===1&&mine[0].gerber&&pard.length===2&&pard[1].gr!==undefined)return R('Afsluiting na Gerber (er ontbreken azen)',{},{so:true});
+  // --- 2♣ sterk ---
+  if(isBid&&open.seat===partner&&open.art&&open.level===2&&open.strain===0&&!mine.length&&last===open&&L===2&&S===1)return R('Relais op 2♣: afwachtend, zegt nog niets over de kracht',{});
+  // --- Multi 2♦ ---
+  if(isBid&&open.seat===partner&&open.multi&&!mine.length&&last===open){
+    if(L===2&&S===2)return R('Pas of verbeter: met harten past partner, met schoppen biedt hij 2♠',{},{pc:true});
+    if(L===2&&S===3)return R('Pas of verbeter: met schoppen past partner, met harten biedt hij 3♥',{},{pc:true});
+    if(L===4&&S===2)return R('Pas of verbeter op 4-niveau: met schoppen verbetert partner naar 4♠',{min:15},{pc:true});
+  }
+  // --- Muiderberg: 2SA vraagt de lage kleur ---
+  if(isBid&&open.seat===partner&&open.muid&&!mine.length&&last===open&&L===2&&S===4)return R('Vraagt naar de lage kleur van partner',{min:11},{ask:true});
+  if(isBid&&pard.length&&pard[pard.length-1].ask&&last===pard[pard.length-1]&&L===3&&S<2&&!mine.slice(1).length)return R(`Antwoord: de lage kleur is ${N(S)}`,{len:{[S]:4}},{nat:true});
+  // --- splinter ---
+  if(isBid&&noInt&&open.seat===partner&&!open.art&&open.level===1&&(open.strain===2||open.strain===3)&&!mine.length&&last===open&&S<4&&S!==open.strain&&isSplinterBid(open.strain,L,S))
+    return R(`Splinter: vierkaart steun ${N(open.strain)}, mancheforcing, singleton of renonce ${N(S)}`,{len:{[open.strain]:4},min:12},{spl:S});
+  // --- Checkback Stayman ---
+  if(isBid&&noInt&&open.seat===partner&&!open.art&&open.level===1&&mine.length===1&&mine[0].level===1&&mine[0].strain>=2&&mine[0].strain<4&&pard.length===2&&pard[1].level===1&&pard[1].strain===4&&last===pard[1]&&L===2&&S===0)
+    return R('Checkback Stayman: zoekt een 5-3 fit in jouw hoge kleur of 4-4 in de andere',{min:11},{cb:mine[0].strain});
+  if(isBid&&noInt&&open.seat===seat&&mine.length===2&&pard.length===2&&pard[1].cb!==undefined&&last===pard[1]&&L===2){
+    const M=pard[1].cb,OM=M===2?3:2;
+    if(S===1)return R('Antwoord op Checkback: geen driekaart steun en geen vierkaart andere hoge kleur',{});
+    if(S===M)return R(`Antwoord op Checkback: driekaart ${N(M)}`,{len:{[M]:3}},{nat:true});
+    if(S===OM)return R(`Antwoord op Checkback: vierkaart ${N(OM)}`,{len:{[OM]:4}},{nat:true});
+  }
+  // --- vierde kleur ---
+  if(isBid&&noInt&&S<4&&open.seat===partner&&!open.art&&mine.length===1&&pard.length===2&&last===pard[1]&&L<=3){
+    const sb=ours.filter(x=>x.type==='bid'&&!x.art&&x.strain<4).map(x=>x.strain),set=new Set(sb);
+    if(set.size===3&&sb.length===3&&!set.has(S))return R('Vierde kleur: kunstmatig en mancheforcing; vraagt partner om meer informatie (bijv. een stopper voor SA)',{min:12},{fsf:S});
+  }
+  // --- RKCB 1430 en antwoorden ---
+  if(isBid&&L===4&&S===4){const t=agreedTrump(ours.concat([]),seat);if(t>=0&&!(open.strain===4&&open.seat%2===seat%2&&ours.length<=2))return R(`RKCB 1430: vraagt naar sleutelkaarten (4 azen + de troefheer ${N(t)})`,{},{rk:t});}
+  if(isBid&&pard.length&&pard[pard.length-1].rk!==undefined&&last===pard[pard.length-1]&&L===5&&S<4){
+    const m=['1 of 4 sleutelkaarten','0 of 3 sleutelkaarten','2 sleutelkaarten zonder troefvrouw','2 sleutelkaarten mét troefvrouw'];
+    return R(`Antwoord op RKCB: ${m[S]}`,{},{rkr:S});
+  }
+  if(isBid&&mine.length&&mine[mine.length-1].rk!==undefined&&L===5&&S===mine[mine.length-1].rk)return R('Afsluiting: er ontbreken twee sleutelkaarten',{},{so:true,nat:true});
+  // --- controlebod ---
+  if(isBid&&S<4&&L===4){const t=agreedTrump(ours,seat);if(t>=2&&S!==t&&bidIdx(L,S)<bidIdx(4,t)&&mine.length>=1&&!(open.seat===partner&&mine.length===0))return R(`Controlebod: eerste- of tweede-ronde controle in ${N(S)} (slemonderzoek)`,{},{cue:t});}
+  // --- tegenbieden ---
+  const oppOpen=open.seat%2!==seat%2;
+  if(c.type==='x'&&open.seat===partner&&!open.art&&open.level===1&&open.strain<4&&!mine.length&&last&&last.seat===(seat+3)%4&&last.type==='bid'&&last.strain<4&&last.level<=2&&opp.length===1){
+    const bs=new Set(bids.map(x=>x.strain)),um=[2,3].filter(m=>!bs.has(m));
+    if(um.length)return R(`Negatief doublet: vierkaart ${um.map(N).join(' en ')}, ${last.level===1?6:8}+ punten`,{min:last.level===1?6:8,len:Object.fromEntries(um.map(m=>[m,4]))},{neg:true});
+  }
+  if(c.type==='x'&&oppOpen&&!open.art&&open.level===1&&open.strain<4&&!pard.length&&!mine.length&&last===open){
+    const o=open.strain;return R(`Informatiedoublet: 12+ punten, kort in ${N(o)}, steun voor de andere kleuren`,{min:12,len:Object.fromEntries([0,1,2,3].filter(s=>s!==o).map(s=>[s,3]))},{tod:o});
+  }
+  if(isBid&&oppOpen&&!open.art&&open.level===1&&open.strain<4&&!pard.length&&!mine.length&&last===open&&L===2&&S===open.strain){
+    if(S<2)return R('Michaels: minstens 5-5 in harten en schoppen',{min:8,len:{2:5,3:5}},{mich:'maj'});
+    const om=S===2?3:2;return R(`Michaels: vijfkaart ${N(om)} + vijfkaart lage kleur`,{min:8,len:{[om]:5}},{mich:om});
+  }
+  if(isBid&&oppOpen&&!open.art&&open.level===1&&open.strain<4&&!pard.length&&!mine.length&&last===open&&L===2&&S===4){
+    const two=[0,1,2,3].filter(s=>s!==open.strain).slice(0,2);return R(`Unusual 2SA: minstens 5-5 in ${two.map(N).join(' en ')}`,{min:8,len:{[two[0]]:5,[two[1]]:5}},{unu:two});
+  }
+  if(isBid&&oppOpen&&open.level===1&&open.strain===4&&!pard.length&&!mine.length&&last===open&&L===2&&S===0)return R('Landy: minstens 5-4 in harten en schoppen',{min:8,len:{2:4,3:4}},{landy:true});
+  if(isBid&&pard.length===1&&pard[0].mich!==undefined&&pard[0].mich!=='maj'&&last===pard[0]&&!mine.length&&L===2&&S===4)return R('Vraagt naar de lage kleur van partner',{min:10},{ask:true});
+  return null;
+}
+/* ---------- de computer biedt op niveau Gevorderd ---------- */
+function aiBidAdv(st,seat,jit){
+  let r=null;
+  try{r=advSpecial(st,seat,jit||0);}catch(e){r=null;}
+  if(r&&r.call&&(r.call.type!=='bid'||canBid(st.auction,r.call.level,r.call.strain))&&(r.call.type!=='x'||canDouble(st.auction,seat)))return r;
+  return aiBid(st,seat,jit,{adv:true});
+}
+function advSpecial(st,seat,jit){
+  const a=st.auction,h=st.hands[seat],ev=evaluate(h),L=ev.len,hcp=Math.max(0,ev.hcp+jit);
+  const partner=(seat+2)%4;
+  const ok=(l,s)=>canBid(a,l,s);
+  const B=(l,s,reason)=>ok(l,s)?{call:{type:'bid',level:l,strain:s,seat},reason}:null;
+  const P=reason=>({call:{type:'pass',seat},reason});
+  const X=reason=>canDouble(a,seat)?{call:{type:'x',seat},reason}:null;
+  const nonPass=a.filter(x=>x.type!=='pass'),bids=a.filter(x=>x.type==='bid');
+  const ours=nonPass.filter(x=>x.seat%2===seat%2),opp=nonPass.filter(x=>x.seat%2!==seat%2);
+  const mine=nonPass.filter(x=>x.seat===seat),pard=nonPass.filter(x=>x.seat===partner);
+  const last=nonPass[nonPass.length-1],N=sym,SN=SUIT_NAME;
+  const cheapest=s=>{for(let l=1;l<=7;l++)if(ok(l,s))return l;return 9;};
+  const pl=pard[pard.length-1];
+  const longest=(cands)=>cands.slice().sort((x,y)=>L[y]-L[x]||y-x)[0];
+  // ---------- openingen ----------
+  if(!bids.length){
+    const srt=[...L].sort((x,y)=>y-x);
+    if(hcp>=22||(hcp>=19&&ltc(h)<=4))return B(2,0,`${hcp} punten${hcp<22?' en een sterke verdeling (weinig verliezers)':''}: open 2♣, de sterkste opening (mancheforcing).`);
+    if(hcp>=15&&hcp<=17&&ev.bal)return B(1,4,`${hcp} punten, evenwichtig (${ev.dist}): open 1SA (15-17).`);
+    if(hcp>=20&&hcp<=21&&ev.bal)return B(2,4,`${hcp} punten evenwichtig: open 2SA (20-21).`);
+    if(hcp>=12||(hcp>=10&&hcp+srt[0]+srt[1]>=20)){const s=openSuit(L);return B(1,s,`${hcp} punten${hcp<12?' (regel van 20)':''}: open 1${N(s)}${s>=2?` met je vijfkaart ${SN[s]}`:' (geen vijfkaart hoog)'}.`);}
+    if(hcp>=6&&hcp<=10){
+      const m6=L[2]===6&&L[3]<=3?2:(L[3]===6&&L[2]<=3?3:-1);
+      if(m6>=0)return B(2,1,`Zwak (${hcp} punten) met een zeskaart ${SN[m6]}: open Multi 2♦.`);
+      for(const M of [3,2]){const OM=M===2?3:2;if(L[M]===5&&L[OM]<=3&&(L[0]>=4||L[1]>=4))return B(2,M,`Zwak (${hcp} punten) met vijf ${SN[M]} en een vier/vijfkaart lage kleur: open Muiderberg 2${N(M)}.`);}
+    }
+    for(const s of [3,2,1,0])if(L[s]>=7&&hcp>=5&&hcp<=10)return B(3,s,`Zwak met een zevenkaart ${SN[s]}: preëmptief 3${N(s)}.`);
+    return P(`${hcp} punten: niet genoeg om te openen. Pas.`);
+  }
+  const open=bids[0];
+  // afsluiting of 'pas of verbeter' van partner respecteren
+  if(pl&&pl.so&&last===pl)return P('Partner sluit af. Pas.');
+  // ---------- partner opende 1SA ----------
+  if(open.seat===partner&&open.strain===4&&open.level===1&&!mine.length&&last===open){
+    const m6=L[3]>=6?3:(L[2]>=6?2:-1);
+    if(m6>=0&&hcp>=10&&hcp<=15)return B(4,m6===2?1:2,`Zeskaart ${SN[m6]} en manchekracht zonder slem: Texas 4${N(m6===2?1:2)}; partner biedt 4${N(m6)}.`);
+    const m5=L[3]>=5&&L[3]>=L[2]?3:(L[2]>=5?2:-1);
+    if(m5>=0)return B(2,m5===2?1:2,`Vijfkaart ${SN[m5]}: Jacoby transfer 2${N(m5===2?1:2)}. Partner biedt 2${N(m5)}, zodat de sterke hand speelt.`);
+    if((L[2]===4||L[3]===4)&&hcp>=8)return B(2,0,`${hcp} punten met een vierkaart hoog: Stayman 2♣ om een 4-4 fit te zoeken.`);
+    if(hcp>=17)return B(4,0,`Partner 15-17 + jouw ${hcp}: slemkansen. Gerber 4♣ vraagt naar de azen.`);
+    if(hcp>=10)return B(3,4,`Partner 15-17 + jouw ${hcp} = manche: 3SA.`);
+    if(hcp>=8)return B(2,4,`${hcp} punten: uitnodiging met 2SA.`);
+    return P(`Partner 15-17 + jouw ${hcp} punten: geen manche. Pas.`);
+  }
+  // ---------- partner opende 2SA ----------
+  if(open.seat===partner&&open.strain===4&&open.level===2&&!mine.length&&last===open){
+    const m5=L[3]>=5&&L[3]>=L[2]?3:(L[2]>=5?2:-1);
+    if(m5>=0)return B(3,m5===2?1:2,`Vijfkaart ${SN[m5]}: transfer 3${N(m5===2?1:2)}.`);
+    if((L[2]===4||L[3]===4)&&hcp>=4)return B(3,0,`Vierkaart hoog: Stayman 3♣.`);
+    if(hcp>=12)return B(4,0,`Partner 20-21 + jouw ${hcp}: Gerber 4♣ voor slem.`);
+    if(hcp>=4)return B(3,4,`Partner 20-21 + jouw ${hcp}: 3SA.`);
+    return P('Te zwak voor de manche. Pas.');
+  }
+  // ---------- openaar na Stayman / transfer / Texas / Gerber ----------
+  if(open.seat===seat&&open.strain===4&&mine.length===1&&pard.length===1&&pl.art&&last===pl){
+    const sl=open.level;
+    if(pl.stay){if(L[2]>=4)return B(sl+1,2,'Antwoord op Stayman: je hebt een vierkaart harten.');if(L[3]>=4)return B(sl+1,3,'Antwoord op Stayman: je hebt een vierkaart schoppen.');return B(sl+1,1,'Antwoord op Stayman: geen vierkaart hoog, dus 2♦.');}
+    if(pl.tr!==undefined){const t=pl.tr;if(sl===1&&L[t]>=4&&hcp>=17)return B(3,t,`Super-accept: vier ${SN[t]} en een maximum, dus meteen 3${N(t)}.`);return B(sl+1,t,`Transfer uitvoeren: bied ${sl+1}${N(t)}.`);}
+    if(pl.tex!==undefined)return B(4,pl.tex,`Texas uitvoeren: bied 4${N(pl.tex)}.`);
+    if(pl.gerber){const ac=aceCount(h);const s=[1,2,3,4][ac%4===0&&ac===4?0:ac];return B(4,s,`Antwoord op Gerber: ${ac} azen.`);}
+  }
+  // ---------- antwoorder na het antwoord op Stayman / transfer / Gerber ----------
+  if(open.seat===partner&&open.strain===4&&mine.length===1&&mine[0].art&&pard.length===2&&last===pl){
+    const pts=open.level===1?16:20,comb=hcp+pts,m0=mine[0];
+    if(m0.stay){
+      const fm=pl.strain===2&&L[2]>=4?2:(pl.strain===3&&L[3]>=4?3:-1);
+      if(fm>=0){if(comb>=25)return B(4,fm,`Fit in ${SN[fm]} gevonden en manchekracht: 4${N(fm)}.`);return B(3,fm,`Fit in ${SN[fm]}, maar net te weinig voor manche: uitnodigen met 3${N(fm)}.`);}
+      if(comb>=25)return B(3,4,'Geen fit in een hoge kleur, wel manche: 3SA.');
+      return B(2,4,'Geen fit, uitnodigende kracht: 2SA.');
+    }
+    if(m0.tr!==undefined){
+      const t=m0.tr;
+      if(pl.level===3&&pl.strain===t){if(hcp>=6)return B(4,t,'Partner doet een super-accept: met wat punten bied je de manche.');return P('Partner doet een super-accept, maar je bent erg zwak. Pas.');}
+      if(L[t]>=6){if(comb>=25)return B(4,t,`Zeskaart ${SN[t]} en manchekracht: 4${N(t)}.`);if(comb>=23)return B(3,t,`Zeskaart ${SN[t]}: uitnodigen met 3${N(t)}.`);return P(`Zwak met een lange ${SN[t]}kleur: 2${N(t)} is prima. Pas.`);}
+      if(comb>=25)return B(3,4,`Vijfkaart ${SN[t]} en manchekracht: 3SA. Partner kiest tussen 3SA en 4${N(t)}.`);
+      if(comb>=23)return B(2,4,`Vijfkaart ${SN[t]}, uitnodigend: 2SA.`);
+      return P(`Zwak met een vijfkaart ${SN[t]}: in 2${N(t)} blijven. Pas.`);
+    }
+    if(m0.gerber&&pl.gr!==undefined){
+      const pa=[0,1,2,3][pl.strain-1]===0&&aceCount(h)===0?4:[0,1,2,3][pl.strain-1];const tot=aceCount(h)+pa;
+      if(tot===4&&comb>=37)return B(7,4,'Alle azen en genoeg kracht: groot slem 7SA!');
+      if(tot>=3&&comb>=33)return B(6,4,`Samen ${tot} azen en genoeg punten: 6SA.`);
+      if(ok(4,4))return B(4,4,`Er ontbreken ${4-tot} azen: afsluiten in 4SA.`);
+      return P('Er ontbreken azen: afsluiten.');
+    }
+  }
+  // ---------- openaar na de tweede beurt van de antwoorder (na Stayman/transfer) ----------
+  if(open.seat===seat&&open.strain===4&&open.level===1&&mine.length===2&&pard.length===2&&last===pl&&pard[0].art){
+    const p0=pard[0],max=hcp>=17;
+    if(p0.tr!==undefined){const t=p0.tr;
+      if(pl.level===3&&pl.strain===4)return L[t]>=3?B(4,t,`Partner heeft vijf ${SN[t]}, jij drie: 4${N(t)} is beter dan 3SA.`):P('Geen driekaart steun: 3SA is het contract. Pas.');
+      if(pl.level===2&&pl.strain===4){if(max)return L[t]>=3?B(4,t,`Maximum en steun: 4${N(t)}.`):B(3,4,'Maximum zonder steun: 3SA.');return L[t]>=3?B(3,t,`Minimum met steun: 3${N(t)}.`):P('Minimum zonder steun: 2SA. Pas.');}
+      if(pl.level===3&&pl.strain===t)return max?B(4,t,`Maximum: de manche 4${N(t)}.`):P('Minimum: pas op de uitnodiging.');
+    }
+    if(p0.stay){const ms=mine[1].strain;
+      if(pl.strain===4&&ms===2&&L[3]>=4){if(pl.level===3)return B(4,3,'Partner heeft dus vier schoppen (anders geen Stayman), jij ook: 4♠.');return B(max?4:3,3,'Partner heeft vier schoppen, jij ook: schoppen is de troefkleur.');}
+      if(pl.level===2&&pl.strain===4)return max?B(3,4,'Maximum: 3SA.'):P('Minimum: pas op 2SA.');
+      if(pl.level===3&&pl.strain<4&&pl.strain===ms)return max?B(4,ms,`Maximum: 4${N(ms)}.`):P('Minimum: pas op de uitnodiging.');
+    }
+  }
+  // ---------- partner opende 2♣ sterk ----------
+  if(open.seat===partner&&open.art&&open.level===2&&open.strain===0&&!mine.length&&last===open){
+    for(const M of [3,2])if(L[M]>=5&&hcp>=8&&h.filter(c=>c.s===M&&c.r>=12).length>=2)return B(2,M,`Positief antwoord: ${hcp} punten en een goede vijfkaart ${SN[M]}.`);
+    return B(2,1,'Op 2♣ bied je bijna altijd 2♦ (relais): partner vertelt eerst meer over zijn hand.');
+  }
+  if(open.seat===seat&&open.art&&open.level===2&&open.strain===0&&mine.length===1&&pard.length===1&&last===pl&&pl.art){
+    if(ev.bal&&hcp<=24)return B(2,4,`Evenwichtig 22-24: 2SA.`);
+    if(ev.bal&&hcp<=27)return B(3,4,`Evenwichtig 25-27: 3SA.`);
+    const s=longest([3,2,1,0]);const l=cheapest(s);return B(l,s,`Je langste kleur bieden: ${l}${N(s)} (forcing).`);
+  }
+  if(open.seat===partner&&open.art&&open.level===2&&open.strain===0&&mine.length===1&&mine[0].art&&pard.length===2&&last===pl){
+    if(pl.strain===4&&pl.level===2){if(hcp>=3)return B(3,4,`Partner 22-24 + jouw ${hcp}: 3SA.`);return P('Partner 22-24 en jij bijna niets: pas op 2SA.');}
+    if(pl.strain<4){const t=pl.strain;if(L[t]>=3&&t>=2)return hcp<=7?B(4,t,`Steun voor partners ${SN[t]}, zwak: 4${N(t)}.`):B(3,t,`Steun voor ${SN[t]} met punten: 3${N(t)}, slem is mogelijk.`);
+      for(const M of [3,2])if(M!==t&&L[M]>=5){const l=cheapest(M);if(l<=3)return B(l,M,`Eigen vijfkaart ${SN[M]}: ${l}${N(M)}.`);}
+      if(ok(2,4))return B(2,4,'Geen steun en geen eigen kleur: 2SA (afwachtend).');if(ok(3,4))return B(3,4,'Geen steun: 3SA.');}
+  }
+  // ---------- Multi 2♦ ----------
+  if(open.seat===partner&&open.multi&&!mine.length&&last===open){
+    if(hcp>=16&&L[2]>=3&&L[3]>=3)return B(4,2,'Sterk met steun voor beide hoge kleuren: 4♥ pas of verbeter.');
+    if(hcp>=16&&ev.bal)return B(3,4,'Sterk en evenwichtig: 3SA.');
+    if(L[2]<=1&&L[3]>=3)return B(2,3,'Kort in harten, steun in schoppen: 2♠ pas of verbeter.');
+    return B(2,2,'Zwak: 2♥ pas of verbeter. Met harten past partner, met schoppen biedt hij 2♠.');
+  }
+  if(open.seat===seat&&open.multi&&mine.length===1&&pard.length===1&&last===pl&&pl.pc){
+    const M=L[2]>=6?2:3;
+    if(pl.level===2&&pl.strain===2)return M===2?P('Je hebt harten: pas op 2♥.'):B(2,3,'Je hebt schoppen: 2♠.');
+    if(pl.level===2&&pl.strain===3)return M===3?P('Je hebt schoppen: pas op 2♠.'):B(3,2,'Je hebt harten: 3♥.');
+    if(pl.level===4&&pl.strain===2)return M===2?P('Je hebt harten: pas op 4♥.'):B(4,3,'Je hebt schoppen: 4♠.');
+  }
+  // ---------- Muiderberg 2♥/2♠ ----------
+  if(open.seat===partner&&open.muid&&!mine.length&&last===open){
+    const M=open.strain;
+    if(L[M]>=3&&hcp>=16)return B(4,M,`Steun en kracht: de manche 4${N(M)}.`);
+    if(L[M]>=3&&hcp>=11)return B(3,M,`Steun, uitnodigend: 3${N(M)}.`);
+    if(L[M]<=1&&hcp>=11&&hcp<=15)return B(2,4,'Geen steun: 2SA vraagt naar partners lage kleur.');
+    if(L[M]<=1&&hcp>=16&&ev.bal)return B(3,4,'Sterk zonder steun: 3SA.');
+    return P(`Partner is zwak; met ${hcp} punten blijf je laag. Pas.`);
+  }
+  if(open.seat===seat&&open.muid&&mine.length===1&&pard.length===1&&last===pl){
+    const M=open.strain;
+    if(pl.ask){const m=L[0]>=L[1]?0:1;return B(3,m,`Antwoord: je lage kleur is ${SN[m]}.`);}
+    if(pl.level===3&&pl.strain===M)return hcp>=9?B(4,M,`Maximum: 4${N(M)}.`):P('Minimum: pas op de uitnodiging.');
+  }
+  // ---------- splinter: antwoorder ----------
+  if(open.seat===partner&&!open.art&&open.level===1&&(open.strain===2||open.strain===3)&&!mine.length&&last===open&&opp.length===0){
+    const M=open.strain;
+    if(L[M]>=4&&hcp>=12&&hcp<=16){for(const s of [0,1,2,3]){if(s===M||L[s]>1)continue;const pr=SPLINTERS[M].find(x=>x[1]===s);if(pr&&ok(pr[0],s))return B(pr[0],s,`Vier ${SN[M]}, openingskracht en kort in ${SN[s]}: splinter ${pr[0]}${N(s)}.`);}}
+  }
+  // ---------- openaar na splinter ----------
+  if(open.seat===seat&&mine.length===1&&pard.length===1&&pl.spl!==undefined&&last===pl){
+    const M=open.strain,s=pl.spl,wasted=h.filter(c=>c.s===s&&c.r>=11&&c.r<=13).length;
+    if(hcp-wasted*2>=16)return B(4,4,`Partner is kort in ${SN[s]} en jij hebt daar weinig verspilde punten: slemonderzoek met RKCB 4SA.`);
+    return B(4,M,`${wasted?'Verspilde honneurs in de korte kleur van partner':'Minimum'}: afsluiten in 4${N(M)}.`);
+  }
+  // ---------- Checkback (antwoorder) en vierde kleur ----------
+  if(open.seat===partner&&!open.art&&open.level===1&&opp.length===0&&mine.length===1&&pard.length===2&&last===pl){
+    const m0=mine[0],p1=pl;
+    if(m0.level===1&&m0.strain>=2&&m0.strain<4&&p1.level===1&&p1.strain===4&&L[m0.strain]>=5&&hcp>=11)return B(2,0,`Checkback Stayman: kijken of partner drie ${SN[m0.strain]} heeft.`);
+    const sb=ours.filter(x=>x.type==='bid'&&!x.art&&x.strain<4).map(x=>x.strain),set=new Set(sb);
+    if(set.size===3&&sb.length===3&&hcp>=12){
+      const d=[0,1,2,3].find(s=>!set.has(s)),a0=open.strain,c2=p1.strain;
+      const fitA=L[a0]>=(a0>=2?3:4),fitC=L[c2]>=4,stopD=stopper(h,d);
+      if(!fitA&&!fitC&&!stopD&&L[m0.strain]<6){const l=cheapest(d);if(l<=3)return B(l,d,`Openingskracht, maar geen fit en geen stopper in ${SN[d]}: vierde kleur ${l}${N(d)} (forcing).`);}
+    }
+  }
+  if(open.seat===seat&&!open.art&&opp.length===0&&mine.length===2&&pard.length===2&&last===pl){
+    if(pl.cb!==undefined){const M=pl.cb,OM=M===2?3:2;if(L[M]>=3)return B(2,M,`Antwoord op Checkback: drie ${SN[M]}.`);if(L[OM]>=4&&ok(2,OM))return B(2,OM,`Antwoord op Checkback: vier ${SN[OM]}.`);return B(2,1,'Antwoord op Checkback: 2♦ = geen van beide.');}
+    if(pl.fsf!==undefined){const d=pl.fsf,b=pard[0].strain;
+      if(stopper(h,d)){const l=cheapest(4);if(l<=3)return B(l,4,`Je hebt een stopper in ${SN[d]}: ${l}SA.`);}
+      if(L[b]>=3){const l=cheapest(b);if(l<=4)return B(l,b,`Driekaart steun voor ${SN[b]}: ${l}${N(b)}.`);}
+      const o=open.strain;if(L[o]>=5){const l=cheapest(o);if(l<=3)return B(l,o,`Je eigen kleur is een vijfkaart: ${l}${N(o)}.`);}
+      const l=cheapest(4);if(l<=3)return B(l,4,`Geen betere keuze: ${l}SA.`);
+    }
+  }
+  if(open.seat===partner&&opp.length===0&&mine.length===2&&mine[1].cb!==undefined&&pard.length===3&&last===pl){
+    const M=mine[1].cb,OM=M===2?3:2,comb=hcp+13;
+    const fm=pl.strain===M?M:(pl.strain===OM&&L[OM]>=4?OM:-1);
+    if(fm>=0)return comb>=25?B(4,fm,`Fit gevonden: 4${N(fm)}.`):B(3,fm,`Fit gevonden, uitnodigend: 3${N(fm)}.`);
+    return comb>=25?B(3,4,'Geen fit: 3SA.'):B(2,4,'Geen fit, uitnodigend: 2SA.');
+  }
+  // ---------- RKCB: antwoorden en vervolg ----------
+  if(pl&&pl.rk!==undefined&&last===pl){
+    const t=pl.rk,kc=keycards(h,t),q=hasTrumpQ(h,t);
+    if(kc===1||kc===4)return B(5,0,`Antwoord op RKCB: ${kc} sleutelkaart${kc>1?'en':''} → 5♣.`);
+    if(kc===0||kc===3)return B(5,1,`Antwoord op RKCB: ${kc} sleutelkaarten → 5♦.`);
+    return q?B(5,3,'Antwoord op RKCB: 2 sleutelkaarten mét troefvrouw → 5♠.'):B(5,2,'Antwoord op RKCB: 2 sleutelkaarten zonder troefvrouw → 5♥.');
+  }
+  if(mine.length&&mine[mine.length-1].rk!==undefined&&pl&&pl.rkr!==undefined&&last===pl){
+    const t=mine[mine.length-1].rk,my=keycards(h,t),K=interpret(a),pk=K[partner];
+    let pkc=[1,0,2,2][pl.rkr];if(pl.rkr<=1){const hi=pl.rkr===0?4:3;if(my+hi<=5&&pk.min>=13)pkc=hi;}
+    const miss=5-my-pkc,comb=hcp+pk.min+2,haveQ=hasTrumpQ(h,t)||pl.rkr===3;
+    if(miss>=2){if(ok(5,t))return B(5,t,`Er ontbreken ${miss} sleutelkaarten: afsluiten in 5${N(t)}.`);return B(6,t,'Afsluiten op het laagste niveau.');}
+    if(miss===0&&haveQ&&comb>=37&&ok(7,t))return B(7,t,'Alle sleutelkaarten en de troefvrouw: groot slem!');
+    return B(6,t,`${miss===1?'Eén sleutelkaart ontbreekt':'Alle sleutelkaarten aanwezig'}: klein slem 6${N(t)}.`);
+  }
+  // ---------- controlebod: partner reageert ----------
+  if(pl&&pl.cue!==undefined&&last===pl){
+    const t=pl.cue,K=interpret(a),pk=K[partner],comb=hcp+pk.min+3;
+    if(comb>=31&&ok(4,4))return B(4,4,'Partner zoekt slem en jij hebt ook extra\'s: RKCB 4SA.');
+    return B(4,t,`Niet genoeg voor slem: afsluiten in 4${N(t)}.`);
+  }
+  // ---------- negatief doublet ----------
+  if(open.seat===partner&&!open.art&&open.level===1&&open.strain<4&&!mine.length&&opp.length===1&&last===opp[0]&&last.seat===(seat+3)%4&&last.type==='bid'&&last.strain<4&&last.level<=2){
+    const bs=new Set(bids.map(x=>x.strain)),um=[2,3].filter(m=>!bs.has(m));
+    const need=last.level===1?6:8,o=open.strain;
+    const support=o>=2&&L[o]>=3;
+    if(!support&&um.length&&hcp>=need){
+      const has4=um.every(m=>L[m]>=4)||(um.length===1&&L[um[0]]>=4);
+      const five=um.find(m=>L[m]>=5&&ok(1,m));
+      if(has4&&!five)return X(`Negatief doublet: ${hcp} punten en vier ${um.map(m=>SN[m]).join(' en ')}.`);
+    }
+  }
+  if(open.seat===seat&&mine.length===1&&pard.length===1&&pl.neg&&last===pl){
+    const um=Object.keys(pl.sh.len||{}).map(Number);
+    const fm=um.find(m=>L[m]>=4);
+    if(fm!==undefined){const l=cheapest(fm);if(l<=3)return B(hcp>=16&&ok(l+1,fm)?l+1:l,fm,`Partner beloofde vier ${SN[fm]} en jij hebt er ook vier: ${SN[fm]}.`);}
+    const ob=opp[0].strain;if(ev.bal&&stopper(h,ob)){const l=cheapest(4);if(l<=2)return B(l,4,`Evenwichtig met een stopper in ${SN[ob]}: ${l}SA.`);}
+    const o=open.strain,l=cheapest(o);if(l<=2&&L[o]>=5)return B(l,o,`Herhaal je vijfkaart: ${l}${N(o)}.`);
+    for(const s of [0,1,2,3])if(s!==o&&s!==ob&&L[s]>=4){const l2=cheapest(s);if(l2<=2)return B(l2,s,`Laat je tweede kleur zien: ${l2}${N(s)}.`);}
+    if(ok(cheapest(o),o)&&cheapest(o)<=2)return B(cheapest(o),o,'Geen betere keuze: je eigen kleur.');
+  }
+  // ---------- tegenpartij opende: Landy, Michaels, Unusual 2SA, informatiedoublet ----------
+  const oppOpen=open.seat%2!==seat%2;
+  if(oppOpen&&!pard.length&&!mine.length&&last===open&&!open.art){
+    if(open.level===1&&open.strain===4&&hcp>=8&&L[2]>=4&&L[3]>=4&&(L[2]>=5||L[3]>=5))return B(2,0,`Landy 2♣: vijf-vier in de hoge kleuren tegen hun 1SA.`);
+    if(open.level===1&&open.strain<4&&hcp>=8&&hcp<=16){
+      const o=open.strain;
+      if(o<2&&L[2]>=5&&L[3]>=5)return B(2,o,'Michaels: vijf-vijf in harten en schoppen.');
+      if(o>=2){const om=o===2?3:2;if(L[om]>=5&&(L[0]>=5||L[1]>=5))return B(2,o,`Michaels: vijf ${SN[om]} en een vijfkaart lage kleur.`);}
+      const two=[0,1,2,3].filter(s=>s!==o).slice(0,2);if(L[two[0]]>=5&&L[two[1]]>=5)return B(2,4,`Unusual 2SA: vijf-vijf in ${SN[two[0]]} en ${SN[two[1]]}.`);
+    }
+    if(open.level===1&&open.strain<4){
+      const o=open.strain,others=[0,1,2,3].filter(s=>s!==o);
+      const good5=others.find(s=>L[s]>=5&&h.filter(c=>c.s===s&&c.r>=11).length>=2);
+      if(((hcp>=12&&L[o]<=2&&others.every(s=>L[s]>=3))||hcp>=17)&&!(good5!==undefined&&hcp<=16))return X(`Informatiedoublet: ${hcp} punten${hcp>=17?' (sterk)':`, kort in ${SN[o]} en steun voor de andere kleuren`}.`);
+    }
+  }
+  // ---------- antwoorden op tegenbiedconventies van partner ----------
+  if(pard.length===1&&last===pl&&!mine.length&&pl.art){
+    const t=pl;
+    if(t.tod!==undefined){
+      const o=t.tod,cand=[3,2,1,0].filter(s=>s!==o);
+      if(hcp>=12){for(const M of [3,2])if(M!==o&&L[M]>=4&&ok(4,M))return B(4,M,`Partner doubleerde en jij hebt ${hcp} punten en vier ${SN[M]}: de manche.`);if(stopper(h,o)&&ok(3,4))return B(3,4,`${hcp} punten met een stopper: 3SA.`);}
+      if(hcp>=8&&hcp<=10&&ev.bal&&stopper(h,o)&&ok(1,4))return B(1,4,`8-10 punten met een stopper in ${SN[o]}: 1SA.`);
+      const best=cand.slice().sort((x,y)=>(L[y]+(y>=2?0.5:0))-(L[x]+(x>=2?0.5:0)))[0];
+      let l=cheapest(best);if(hcp>=9&&hcp<=11&&ok(l+1,best))l=l+1;
+      return B(l,best,`Op een informatiedoublet moet je bieden: je beste kleur ${SN[best]}${hcp>=9?' met een sprong (9-11 punten)':''}.`);
+    }
+    if(t.mich==='maj'){const M=L[3]>=L[2]?3:2;if(hcp>=11&&L[M]>=3)return B(4,M,`Fit met partners Michaels en ${hcp} punten: 4${N(M)}.`);const l=cheapest(M);return B(l,M,`Kies partners beste hoge kleur: ${l}${N(M)}.`);}
+    if(t.mich!==undefined){const om=t.mich;if(L[om]>=3){if(hcp>=11)return B(4,om,`Fit in ${SN[om]}: 4${N(om)}.`);const l=cheapest(om);return B(l,om,`Steun voor ${SN[om]}: ${l}${N(om)}.`);}if(ok(2,4))return B(2,4,`Geen steun voor ${SN[om]}: 2SA vraagt naar de lage kleur.`);}
+    if(t.unu){const [s1,s2]=t.unu,s=L[s2]>L[s1]||(L[s2]===L[s1]&&s2>s1)?s2:s1;if(hcp>=12&&s>=2&&L[s]>=3&&ok(4,s))return B(4,s,`Fit en kracht: 4${N(s)}.`);const l=cheapest(s);return B(l,s,`Kies de beste van partners twee kleuren: ${l}${N(s)}.`);}
+    if(t.landy){const M=L[3]>L[2]?3:2;if(hcp>=14&&L[M]>=4)return B(4,M,`Fit met Landy en ${hcp} punten: 4${N(M)}.`);if(hcp>=11&&L[M]>=4)return B(3,M,`Uitnodigend: 3${N(M)}.`);return B(2,M,`Kies de beste hoge kleur: 2${N(M)}.`);}
+  }
+  if(mine.length===1&&mine[0].mich!==undefined&&mine[0].mich!=='maj'&&pl&&pl.ask&&last===pl){const m=L[0]>=L[1]?0:1;return B(3,m,`Partner vraagt je lage kleur: ${SN[m]}.`);}
+  // ---------- 2♣ is mancheforcing: niet passen onder de manche ----------
+  if(open.art&&open.level===2&&open.strain===0&&open.seat%2===seat%2&&last&&last.seat===partner&&last.type==='bid'){
+    const lb=last,game=lb.strain===4?3:lb.strain>=2?4:5;
+    const sa22=ours.some(x=>x.seat===open.seat&&x.level===2&&x.strain===4);
+    if(lb.level<game&&!(sa22&&!pard.some(x=>x!==open&&x.level>=3))){
+      const ps=lb.strain;
+      if(ps<4&&ps>=2&&L[ps]>=3&&ok(4,ps))return B(4,ps,`2♣ is mancheforcing: met steun voor ${SN[ps]} bied je de manche 4${N(ps)}.`);
+      if(ok(3,4)&&lb.level<=3)return B(3,4,'2♣ is mancheforcing: geen fit in een hoge kleur, dus 3SA.');
+      if(ps<4&&ok(game,ps))return B(game,ps,`2♣ is mancheforcing: de manche in ${SN[ps]}.`);
+    }
+  }
+  return null;
+}
+/* Handwaardering voor een ervaren speler (alleen bij Gevorderd). */
+function advPoints(h,L,hcp,fit,partnerLen,partnerSuits,oppSuits){
+  let p=hcp;
+  if(fit>=0){
+    const supporting=L[fit]<=(partnerLen[fit]||0);
+    if(supporting){for(let s=0;s<4;s++){if(s===fit)continue;p+=L[s]===0?5:L[s]===1?3:L[s]===2?1:0;}}
+    else{for(let s=0;s<4;s++)if(L[s]>4)p+=L[s]-4;}
+  }
+  for(const s of partnerSuits)if(h.some(c=>c.s===s&&c.r>=11&&c.r<=12))p+=1;
+  for(let s=0;s<4;s++){const cs=h.filter(c=>c.s===s);if(cs.length===1&&cs[0].r>=11&&cs[0].r<=13&&!partnerSuits.includes(s))p-=1;if(cs.length===2&&cs.some(c=>c.r===12||c.r===11)&&!cs.some(c=>c.r>=13)&&!partnerSuits.includes(s))p-=1;}
+  for(const s of oppSuits){const cs=h.filter(c=>c.s===s);if(cs.some(c=>c.r===12||c.r===11)&&!cs.some(c=>c.r>=13))p-=1;}
+  return p;
+}
+
+function aiBidL(st,seat,jit,level){return level==='adv'?aiBidAdv(st,seat,jit):aiBid(st,seat,jit);}
+function annotateCall(auc,c,level){if(level!=='adv'||!c)return c;let an=null;try{an=annotate(auc,c);}catch(e){an=null;}return an?Object.assign(c,an):c;}
 /* ---------- spelen ---------- */
 function newPlayState(hands,contract,auction){const ld=(contract.declarer+1)%4;return{hands:hands.map(h=>h.slice()),contract,auction:auction||[],trick:[],history:[],played:new Set(),dummyVisible:false,leader:ld,turn:ld,tricks:[0,0]};}
 function legalCards(hand,trick){if(!trick.length)return hand.slice();const led=trick[0].card.s;const f=hand.filter(c=>c.s===led);return f.length?f:hand.slice();}
@@ -524,14 +950,14 @@ function completeTrick(ps){const w=trickWinner(ps.trick,ps.contract.strain);ps.h
 function openingLead(ps,seat,rng){
   const hand=ps.hands[seat],trump=ps.contract.strain,partner=(seat+2)%4,auc=ps.auction||[];
   const bySuit=s=>hand.filter(c=>c.s===s).sort((a,b)=>b.r-a.r);
-  const pBid=auc.filter(c=>c.type==='bid'&&c.seat===partner&&c.strain<4&&c.strain!==trump);
+  const pBid=auc.filter(c=>c.type==='bid'&&(!c.art||c.nat)&&c.seat===partner&&c.strain<4&&c.strain!==trump);
   if(pBid.length){const s=pBid[pBid.length-1].strain;const cs=bySuit(s);if(cs.length){const top2=cs.length>=2&&cs[0].r>=11&&cs[1].r===cs[0].r-1;const card=(cs.length<=2||top2)?cs[0]:cs[cs.length-1];return{card,reason:`Kom uit in de kleur van partner (${SUIT_NAME[s]}): partner heeft die kleur geboden.`};}}
   const cand=[];
   const trumpsHeld=trump<4?hand.filter(c=>c.s===trump).length:0;
   for(let s=0;s<4;s++){
     const cs=bySuit(s);if(!cs.length)continue;
     const isTr=s===trump;
-    const oppBid=auc.some(c=>c.type==='bid'&&c.strain===s&&c.seat%2===ps.contract.declarer%2);
+    const oppBid=auc.some(c=>c.type==='bid'&&(!c.art||c.nat)&&c.strain===s&&c.seat%2===ps.contract.declarer%2);
     let score=0,card=cs[cs.length-1],why='';
     const seq=cs.length>=2&&cs[0].r>=11&&cs[1].r===cs[0].r-1;
     if(trump<4){
@@ -651,11 +1077,11 @@ function dealNumFavor(n){return Math.floor(n/16)%2===0;}
 function makeDealNumber(board,favor,rng){const b16=((board-1)%16+16)%16;let m=1000+Math.floor((rng||Math.random)()*60000);if((m%2===0)!==!!favor)m++;return 16*m+b16;}
 function validDealNumber(n){return Number.isInteger(n)&&n>=16000&&n<=999999;}
 function dealFromNumber(n){const rng=mulberry32((Math.imul(n>>>0,2654435761)^0x5bd1e995)>>>0);return dealHands(rng,dealNumFavor(n));}
-function simulateTable(deal,board,rng){
+function simulateTable(deal,board,rng,level){
   const st={hands:deal.map(h=>h.slice()),auction:[]};
   const jit=[0,1,2,3].map(()=>Math.floor(rng()*3)-1);
   let seat=dealerOf(board),g=0;
-  while(!auctionOver(st.auction)&&g++<80){let r=null;try{r=aiBid(st,seat,jit[seat]);}catch(e){r=null;}st.auction.push(sanitizeCall(st.auction,r&&r.call,seat));seat=(seat+1)%4;}
+  while(!auctionOver(st.auction)&&g++<80){let r=null;try{r=aiBidL(st,seat,jit[seat],level);}catch(e){r=null;}st.auction.push(annotateCall(st.auction,sanitizeCall(st.auction,r&&r.call,seat),level));seat=(seat+1)%4;}
   const ct=contractOf(st.auction);
   if(!ct)return{score:0,ct:null,tricks:0};
   const ps=newPlayState(deal,ct,st.auction);
@@ -671,7 +1097,7 @@ function simulateTable(deal,board,rng){
 "use strict";
 (function(){
 const $=id=>document.getElementById(id);
-const DEFAULTS={uiScale:1,felt:'#16703f',deck:'knoll',dutchAces:false,backColor:'red',fourColor:false,speed:'normal',favorNS:true,coachAuto:true};
+const DEFAULTS={uiScale:1,felt:'#16703f',deck:'knoll',dutchAces:false,backColor:'red',fourColor:false,speed:'normal',favorNS:true,coachAuto:true,level:'beg'};
 function loadSettings(){try{const s=JSON.parse(localStorage.getItem('hbt-settings')||'{}');return Object.assign({},DEFAULTS,s);}catch(e){return Object.assign({},DEFAULTS);}}
 function saveSettings(){try{localStorage.setItem('hbt-settings',JSON.stringify(S));}catch(e){}}
 const S=loadSettings();
@@ -1051,7 +1477,7 @@ function startBoard(t,board,same,num,opts){
   }
   if(!t.bpos)t.bpos=t.board;
   t.compare=opts.compare||null;
-  t.replay=!!same||!!opts.replay;t.auction=[];t.bidNotes=[];t.turn=dealerOf(t.bpos);t.phase='bidding';t.play=null;t.result=null;t.ts=Date.now();
+  t.level=S.level==='adv'?'adv':'beg';t.replay=!!same||!!opts.replay;t.auction=[];t.bidNotes=[];t.turn=dealerOf(t.bpos);t.phase='bidding';t.play=null;t.result=null;t.ts=Date.now();
 }
 
 /* ---------- acties (alleen de gastheer/solo past ze toe) ---------- */
@@ -1068,7 +1494,7 @@ function applyAction(a){
       const auc=toArr(T.auction);
       if(T.phase!=='bidding'||auctionOver(auc)||a.seat!==T.turn||!authorized(a))return false;
       const c=sanitizeCall(auc,a.call,a.seat);if(!a.call||c.type!==a.call.type)return false;
-      auc.push(c);T.auction=auc;const bn=toArr(T.bidNotes);bn.push(a.note||'');T.bidNotes=bn;
+      annotateCall(auc,c,T.level);auc.push(c);T.auction=auc;const bn=toArr(T.bidNotes);bn.push(a.note||'');T.bidNotes=bn;
       T.turn=(a.seat+1)%4;T.ts=Date.now();
       if(auctionOver(auc)){const ct=contractOf(auc);if(!ct)finishBoard(true);else{T.play={contract:ct,plays:[],notes:[],hold:false};T.phase='play';}}
       return true;}
@@ -1097,7 +1523,7 @@ function finishBoard(passed){
   let scoreNS=0,ct=null,tricks=0;
   if(!passed){const ps=buildPS(T,toArr(T.play.plays).length,false);ct=T.play.contract;tricks=ps.tricks[ct.declarer%2];const v=ct.declarer%2===0?vul.ns:vul.ew;const sc=scoreContract(ct.level,ct.strain,ct.dbl,v,tricks);scoreNS=ct.declarer%2===0?sc:-sc;}
   const rng=mulberry32((T.dealNum||seedFromDeal(deal))+bp*977);const field=[];
-  for(let i=0;i<FIELD;i++){try{const f=simulateTable(deal,bp,rng);field.push({score:f.score,ct:f.ct?{level:f.ct.level,strain:f.ct.strain,dbl:f.ct.dbl,declarer:f.ct.declarer}:null,tricks:f.tricks});}catch(e){}}
+  for(let i=0;i<FIELD;i++){try{const f=simulateTable(deal,bp,rng,T.level);field.push({score:f.score,ct:f.ct?{level:f.ct.level,strain:f.ct.strain,dbl:f.ct.dbl,declarer:f.ct.declarer}:null,tricks:f.tricks});}catch(e){}}
   let mp=0;for(const f of field)mp+=scoreNS>f.score?2:scoreNS===f.score?1:0;
   const pct=field.length?mp/(2*field.length)*100:50;
   T.result={board:b,dealNum:T.dealNum||0,ct,tricks,scoreNS,pct,field,passed:!!passed};
@@ -1132,11 +1558,11 @@ function schedule(){
 }
 function aiBidNow(){
   if(!T||T.phase!=='bidding')return;const seat=T.turn;
-  let r=null;try{r=aiBid(stOf(T),seat,0);}catch(e){r=null;}
+  let r=null;try{r=aiBidL(stOf(T),seat,0,T.level);}catch(e){r=null;}
   const call=sanitizeCall(toArr(T.auction),r&&r.call,seat);
   if(LOCAL.step||LOCAL.autoplay){
-    const K=interpret(toArr(T.auction).concat([call]));
-    LOCAL.explain=`<div class="ex-h">${whoText(seat)} biedt <b>${callText(call)}</b></div><div><b>Betekenis:</b> ${describeShown(K,seat,call)}.</div>`+
+    const an=annotateCall(toArr(T.auction),Object.assign({},call),T.level);const K=interpret(toArr(T.auction).concat([an]));
+    LOCAL.explain=`<div class="ex-h">${whoText(seat)} biedt <b>${callText(call)}</b>${an.alert?' <span class="alertb">⚠ Alert</span>':''}</div><div><b>Betekenis:</b> ${an.alert?esc(an.alert):describeShown(K,seat,call)}.</div>`+
       (seat===MYSEAT||(T.mode==='solo'&&seat===2)?`<div><b>Waarom:</b> ${r?r.reason:''}</div>`:`<div class="ex-note">De precieze reden (met de punten van deze hand) zie je na afloop in de nabespreking.</div>`);
   }
   act({type:'bid',seat,call,uid:'AI',note:r?r.reason:''});
@@ -1254,7 +1680,7 @@ function narrate(){
     SEEN={sig,auc:0,plays:0,contract:false,done:false,lead:false};LOCAL.adviceAt=-1;LOCAL.hintBid=null;LOCAL.hintId=null;LOCAL.explain='';
     if(!quiet){
       const v=vulOf(BP(T)),h=handsOf(T)[MYSEAT],ev=evaluate(h);
-      coach('info',`<b>Spel ${T.board}${T.replay?' (opnieuw)':''}</b>${T.dealNum?` · spelnummer ${T.dealNum}`:''} · Gever: ${seatLabel(dealerOf(BP(T)))} · Kwetsbaar: ${v.label}.<br>Jouw hand (${SEAT_NAME[MYSEAT]}): <b>${ev.hcp} punten</b> en verdeling ${sym(3)}${ev.len[3]} ${sym(2)}${ev.len[2]} ${sym(1)}${ev.len[1]} ${sym(0)}${ev.len[0]}${ev.bal?' (evenwichtig)':''}.`);
+      coach('info',`<b>Spel ${T.board}${T.replay?' (opnieuw)':''}</b>${T.dealNum?` · spelnummer ${T.dealNum}`:''}${T.level==='adv'?' · <b>niveau Gevorderd</b>':''} · Gever: ${seatLabel(dealerOf(BP(T)))} · Kwetsbaar: ${v.label}.<br>Jouw hand (${SEAT_NAME[MYSEAT]}): <b>${ev.hcp} punten</b> en verdeling ${sym(3)}${ev.len[3]} ${sym(2)}${ev.len[2]} ${sym(1)}${ev.len[1]} ${sym(0)}${ev.len[0]}${ev.bal?' (evenwichtig)':''}.`);
       if(dealerOf(BP(T))===MYSEAT)coach('tip','Jij bent gever: jij mag als eerste bieden. Met 12+ punten open je; anders pas je.');
     }
   }
@@ -1262,9 +1688,9 @@ function narrate(){
   if(SEEN.auc>auc.length)SEEN.auc=0;
   for(;SEEN.auc<auc.length;SEEN.auc++){
     if(quiet)continue;const c=auc[SEEN.auc];
-    if(c.seat===MYSEAT)continue;
+    if(c.seat===MYSEAT){if(c.alert)coach('info',`Jouw bod <b>${callText(c)}</b> is een conventie <span class="alertb">⚠ Alert</span>: ${esc(c.alert)}.`);continue;}
     const K=interpret(auc.slice(0,SEEN.auc+1));
-    coach('bid',`${whoText(c.seat)}${(c.seat+2)%4===MYSEAT?' – partner':''}: <b>${callText(c)}</b> — ${describeShown(K,c.seat,c)}.`);
+    coach('bid',`${whoText(c.seat)}${(c.seat+2)%4===MYSEAT?' – partner':''}: <b>${callText(c)}</b>${c.alert?` <span class="alertb">⚠ Alert</span> — ${esc(c.alert)}`:` — ${describeShown(K,c.seat,c)}`}.`);
   }
   if(T.phase!=='bidding'&&T.play&&!SEEN.contract){
     SEEN.contract=true;
@@ -1307,7 +1733,7 @@ function narrate(){
   // biedadvies bij eigen beurt
   if(!quiet&&T.phase==='bidding'&&!auctionOver(auc)&&T.turn===MYSEAT&&isMine(T,MYSEAT)&&LOCAL.adviceAt!==auc.length){
     LOCAL.adviceAt=auc.length;
-    if(S.coachAuto){try{const r=aiBid(stOf(T),MYSEAT,0);LOCAL.hintBid=r.call;coach('tip',`<b>Advies: ${callText(r.call)}</b> — ${r.reason}`);}catch(e){}}
+    if(S.coachAuto&&T.level!=='adv'){try{const r=aiBidL(stOf(T),MYSEAT,0,T.level);LOCAL.hintBid=r.call;coach('tip',`<b>Advies: ${callText(r.call)}</b> — ${r.reason}`);}catch(e){}}
     else LOCAL.hintBid=null;
   }
 }
@@ -1354,7 +1780,7 @@ function doHint(){
   if(!T)return;
   if(T.phase==='bidding'){
     if(T.turn!==MYSEAT||!isMine(T,MYSEAT)||auctionOver(toArr(T.auction))){toast('Wacht tot je aan de beurt bent om te bieden.');return;}
-    const r=aiBid(stOf(T),MYSEAT,0);LOCAL.hintBid=r.call;coach('tip',`<b>Hint: ${callText(r.call)}</b> — ${r.reason}`);render();return;
+    const r=aiBidL(stOf(T),MYSEAT,0,T.level);LOCAL.hintBid=r.call;coach('tip',`<b>Hint: ${callText(r.call)}</b> — ${r.reason}`);render();return;
   }
   if(T.phase==='play'){
     const ps=psOf(T);
@@ -1460,7 +1886,7 @@ function fitBidding(el){
 function biddingHTML(){
   const a=toArr(T.auction),dealer=dealerOf(BP(T)),v=vulOf(BP(T));
   const cells=[];for(let i=0;i<dealer;i++)cells.push('');
-  a.forEach(c=>cells.push(colorize(callText(c),true)));
+  a.forEach(c=>cells.push(c.alert?`<span class="alerted" data-alert="${esc(callText(c)+': '+c.alert)}" title="${esc(c.alert)}">${colorize(callText(c),true)}<sup>⚠</sup></span>`:colorize(callText(c),true)));
   const over=auctionOver(a);if(!over)cells.push('<span class="qmark">?</span>');
   let rows='';for(let i=0;i<cells.length;i+=4)rows+='<tr>'+[0,1,2,3].map(j=>`<td>${cells[i+j]!==undefined?cells[i+j]:''}</td>`).join('')+'</tr>';
   const head=[0,1,2,3].map(s=>`<th class="${(s%2===0?v.ns:v.ew)?'vul':''}">${SEAT_SHORT[s]}${s===MYSEAT?'*':''}</th>`).join('');
@@ -1568,8 +1994,8 @@ function renderReview(){
   const auc=toArr(T.auction),bn=toArr(T.bidNotes);
   let bidRows='';
   auc.forEach((c,i)=>{let why=bn[i]||'';
-    if(!why){try{const adv=aiBid({auction:auc.slice(0,i),hands:handsOf(T)},c.seat,0);why=(callText(adv.call)===callText(c)?'Zelfde als het advies: ':`Eigen keuze (advies was <b>${callText(adv.call)}</b>): `)+adv.reason;}catch(e){}}
-    bidRows+=`<tr><td><b>${whoText(c.seat)}</b></td><td><b>${colorize(callText(c),false)}</b></td><td>${colorize(why,false)}</td></tr>`;});
+    if(!why){try{const adv=aiBidL({auction:auc.slice(0,i),hands:handsOf(T)},c.seat,0,T.level);why=(callText(adv.call)===callText(c)?'Zelfde als het advies: ':`Eigen keuze (advies was <b>${callText(adv.call)}</b>): `)+adv.reason;}catch(e){}}
+    bidRows+=`<tr><td><b>${whoText(c.seat)}</b></td><td><b>${colorize(callText(c),false)}</b>${c.alert?' <span class="alertb">⚠</span>':''}</td><td>${c.alert?`<i>Conventie: ${esc(c.alert)}.</i><br>`:''}${colorize(why,false)}</td></tr>`;});
   let body=`<details ${k===0?'open':''}><summary><b>De bieding met uitleg</b></summary><table>${bidRows}</table></details>`;
   if(!n){openModal('🔍 Nabespreking',body+'<p>Dit spel is gepast; er is niet gespeeld.</p>');return;}
   const ps=buildPS(T,k,true);   // stand vóór kaart k
@@ -2002,7 +2428,7 @@ async function netAction(n,el){
    INSTELLINGEN, KNOPPEN, OPSTARTEN
    ====================================================================== */
 function showTips(){
-  openModal('📘 Bridge-tips voor beginners',`<ol class="tips">
+  openModal('📘 Bridge-tips',`<ol class="tips">
 <li><b>Punten tellen:</b> Aas = 4, Heer = 3, Vrouw = 2, Boer = 1. Er zitten 40 punten in het spel; gemiddeld heeft iedere speler er 10.</li>
 <li><b>Openen:</b> met 12 of meer punten open je. Met 15-17 punten en een evenwichtige hand (4-3-3-3, 4-4-3-2 of 5-3-3-2) open je <b>1SA</b>.</li>
 <li><b>Vijfkaart hoog:</b> open 1${sym(2)} of 1${sym(3)} alleen met minstens vijf kaarten. Anders open je je langste lage kleur (${sym(1)} of ${sym(0)}).</li>
@@ -2016,12 +2442,31 @@ function showTips(){
 <li><b>Troef trekken:</b> haal in een troefcontract eerst de troeven van de tegenstanders op, zodat ze je hoge kaarten niet kunnen introeven.</li>
 <li><b>De snit:</b> speel naar je honneur toe. Met A-V tegenover kleine kaarten speel je klein naar de V; zit de H links, dan maak je twee slagen.</li>
 <li><b>Kwetsbaarheid:</b> een rode naam is kwetsbaar. Down gaan kost dan meer, maar een gehaalde manche levert ook meer op (600+ in plaats van 400+).</li>
-<li><b>De dummy:</b> na de uitkomst legt de partner van de leider zijn kaarten open. De leider speelt beide handen.</li></ol>`);
+<li><b>De dummy:</b> na de uitkomst legt de partner van de leider zijn kaarten open. De leider speelt beide handen.</li></ol>
+<h3 style="margin:1rem 0 .3rem">🎓 Niveau Gevorderd: de conventies</h3>
+<p class="ex-note">Kies het niveau bij ⚙ Instellingen. Een bod met <b>⚠</b> is kunstmatig: tik erop om de betekenis te zien.</p>
+<ol class="tips">
+<li><b>Openingen:</b> 1SA = 15-17 evenwichtig · 2SA = 20-21 · <b>2${sym(0)}</b> = sterk (22+ of 9 vaste slagen), mancheforcing; partner antwoordt meestal 2${sym(1)} (relais).</li>
+<li><b>Multi 2${sym(1)}:</b> zwakke zeskaart harten óf schoppen (6-10 punten). Partner biedt 2${sym(2)} = "pas of verbeter": met harten past de openaar, met schoppen biedt hij 2${sym(3)}.</li>
+<li><b>Muiderberg 2${sym(2)} / 2${sym(3)}:</b> vijfkaart in die hoge kleur plus een vier- of vijfkaart lage kleur, 6-10 punten. 2SA van partner vraagt naar de lage kleur.</li>
+<li><b>Na 1SA:</b> 2${sym(0)} = Stayman (vierkaart hoog?) · 2${sym(1)}/2${sym(2)} = Jacoby transfer naar ${sym(2)}/${sym(3)} · 4${sym(1)}/4${sym(2)} = Texas (zeskaart, manche) · 4${sym(0)} = Gerber (azen vragen). Na 2SA hetzelfde, één niveau hoger.</li>
+<li><b>Splinter:</b> een dubbele sprong in een nieuwe kleur (bijv. 1${sym(3)} – 4${sym(0)}) = vier steun, manchekracht en een singleton of renonce in die kleur.</li>
+<li><b>Vierde kleur:</b> bied je de enige nog niet genoemde kleur, dan is dat kunstmatig en mancheforcing; je vraagt partner om meer, bijvoorbeeld een stopper voor SA.</li>
+<li><b>Checkback Stayman:</b> na 1x – 1${sym(2)}/1${sym(3)} – 1SA vraagt 2${sym(0)} of de openaar drie kaarten in jouw hoge kleur heeft.</li>
+<li><b>RKCB 1430:</b> 4SA vraagt naar de 5 sleutelkaarten (4 azen + troefheer). 5${sym(0)} = 1 of 4 · 5${sym(1)} = 0 of 3 · 5${sym(2)} = 2 zonder troefvrouw · 5${sym(3)} = 2 mét troefvrouw.</li>
+<li><b>Controlebod:</b> met een afgesproken troefkleur laat een nieuwe kleur op 4-niveau een aas (controle) zien: een slempoging.</li>
+<li><b>Negatief doublet:</b> partner opent, de tegenstander komt tussen; jouw doublet belooft de niet-geboden hoge kleur(en) en 6+ punten.</li>
+<li><b>Informatiedoublet:</b> doublet direct op een opening van 1 in een kleur = 12+ punten, kort in die kleur, steun voor de rest. Partner moet bieden.</li>
+<li><b>Michaels / Unusual 2SA / Landy:</b> 1${sym(0)}–2${sym(0)} of 1${sym(1)}–2${sym(1)} = beide hoge kleuren · 1${sym(2)}–2${sym(2)} = schoppen + een lage kleur · 2SA = de twee laagste ongeboden kleuren · 1SA–2${sym(0)} = beide hoge kleuren.</li>
+<li><b>Handwaardering:</b> met een fit tellen korte kleuren mee (renonce 5, singleton 3, doubleton 1); losse honneurs (H, V-x) in een korte kleur tellen minder.</li>
+<li><b>Wet van de Totale Slagen:</b> in de strijd mag je bieden tot het niveau van jullie aantal troeven min 6 (8 troeven → 2-niveau, 9 → 3-niveau).</li></ol>`);
 }
 
 function showSettings(){
   const cfgTxt=(()=>{try{return localStorage.getItem('hbt-fbconfig')||'';}catch(e){return'';}})();
   openModal('⚙ Instellingen',`<div class="setrow" style="flex-wrap:wrap"><label>Kleur speellaken</label><div class="feltrow">${FELTS.map(([n,c])=>`<button class="feltsw ${String(S.felt).toLowerCase()===c?'on':''}" data-set="felt" data-color="${c}" title="${n}" aria-label="${n}" style="background:radial-gradient(circle at 40% 35%,${mixHex(c,'w',0.2)},${c} 60%,${mixHex(c,'b',0.35)})"></button>`).join('')}<label class="feltpick" title="Eigen kleur kiezen">🎨<input type="color" id="feltc" value="${esc(S.felt||'#16703f')}"></label></div></div>
+<div class="setrow"><label for="slv">Spelniveau</label><select id="slv"><option value="beg" ${S.level!=='adv'?'selected':''}>Beginner (eenvoudig biedsysteem)</option><option value="adv" ${S.level==='adv'?'selected':''}>Gevorderd (conventies)</option></select></div>
+<p class="ex-note" style="margin:-.2rem 0 .5rem">Gevorderd: 2♣ sterk, Multi 2♦, Muiderberg, Stayman, transfers, Texas, Gerber, splinter, vierde kleur, Checkback, RKCB 1430, negatief doublet, Michaels, Unusual 2SA, Landy. Kunstmatige biedingen krijgen een ⚠ alert. Biedadvies krijg je alleen als je op 💡 Hint tikt. Het niveau geldt vanaf het volgende spel${T&&T.mode==='online'&&!isHost()?'; aan een online tafel kiest de gastheer het niveau':''}.</p>
 <div class="setrow"><label for="sz">Tekstgrootte</label><select id="sz">${[[0.9,'Klein'],[1,'Normaal'],[1.15,'Groot'],[1.3,'Extra groot'],[1.45,'Heel groot']].map(([v,n])=>`<option value="${v}" ${(+S.uiScale||1)===v?'selected':''}>${n}</option>`).join('')}</select></div>
 <div class="setrow"><label for="sd">Kaartontwerp</label><select id="sd"><option value="knoll" ${S.deck!=='eigen'?'selected':''}>Klassiek (Byron Knoll)</option><option value="eigen" ${S.deck==='eigen'?'selected':''}>Hollandse tekeningen</option></select></div>
 <div class="setrow"><label for="sa">Azen met Nederlandse gebouwen</label><input type="checkbox" id="sa" ${S.dutchAces?'checked':''}></div>
@@ -2037,6 +2482,9 @@ ${(!window.HBT_FIREBASE_CONFIG||isAdmin())?`<details class="advset"><summary><b>
 </details>`:''}<p style="font-size:.85rem;color:#6b5a2a">Klassieke kaarten: Byron Knoll, <i>Vector Playing Cards</i> (public domain). De instellingen worden in deze browser bewaard.</p>`);
   const upd=()=>{S.fourColor=$('s4').checked;S.coachAuto=$('sc').checked;S.favorNS=$('sf').checked;S.speed=$('ss').value;S.backColor=$('sb').value;S.deck=$('sd').value;S.dutchAces=$('sa').checked;saveSettings();resetCardImages();renderCoach();render();};
   ['sd','sa','s4','sb','sc','sf','ss'].forEach(id=>$(id).addEventListener('change',upd));
+  $('slv').addEventListener('change',()=>{S.level=$('slv').value==='adv'?'adv':'beg';saveSettings();
+    if(T&&(T.mode!=='online'||isHost())&&T.phase==='bidding'&&!toArr(T.auction).length&&T.level!==S.level){T.level=S.level;afterChange();toast(S.level==='adv'?'Niveau Gevorderd: geldt meteen voor dit spel.':'Niveau Beginner: geldt meteen voor dit spel.');}
+    else toast('Het nieuwe niveau geldt vanaf het volgende spel.');});
   $('sz').addEventListener('change',e=>{S.uiScale=+e.target.value||1;saveSettings();applyScale();setTimeout(onResize,50);});
   $('feltc').addEventListener('input',e=>{S.felt=e.target.value;applyFelt();saveSettings();document.querySelectorAll('.feltsw').forEach(b=>b.classList.remove('on'));});
 }
@@ -2058,6 +2506,7 @@ document.addEventListener('click',e=>{
   const se=t.closest('[data-set]');if(se){setAction(se.getAttribute('data-set'),se);return;}
   const rv=t.closest('[data-rv]');if(rv){reviewNav(rv.getAttribute('data-rv'));return;}
   const ae=t.closest('[data-act]');if(ae){handleAct(ae.getAttribute('data-act'));return;}
+  const al=t.closest('.alerted');if(al){toast('⚠ '+al.getAttribute('data-alert'));return;}
   const bb=t.closest('.bidbtn');
   if(bb&&!bb.disabled){const c=bb.getAttribute('data-call');if(c)userBid({type:c});else userBid({type:'bid',level:+bb.getAttribute('data-l'),strain:+bb.getAttribute('data-s')});return;}
   const card=t.closest('.card[data-id]');
