@@ -942,7 +942,7 @@ function advPoints(h,L,hcp,fit,partnerLen,partnerSuits,oppSuits){
 function aiBidL(st,seat,jit,level){return level==='adv'?aiBidAdv(st,seat,jit):aiBid(st,seat,jit);}
 function annotateCall(auc,c,level){if(level!=='adv'||!c)return c;let an=null;try{an=annotate(auc,c);}catch(e){an=null;}return an?Object.assign(c,an):c;}
 /* ---------- spelen ---------- */
-function newPlayState(hands,contract,auction){const ld=(contract.declarer+1)%4;return{hands:hands.map(h=>h.slice()),contract,auction:auction||[],trick:[],history:[],played:new Set(),dummyVisible:false,leader:ld,turn:ld,tricks:[0,0]};}
+function newPlayState(hands,contract,auction,level){const ld=(contract.declarer+1)%4;return{level:level||'beg',hands:hands.map(h=>h.slice()),contract,auction:auction||[],trick:[],history:[],played:new Set(),dummyVisible:false,leader:ld,turn:ld,tricks:[0,0]};}
 function legalCards(hand,trick){if(!trick.length)return hand.slice();const led=trick[0].card.s;const f=hand.filter(c=>c.s===led);return f.length?f:hand.slice();}
 function trickWinner(trick,trump){let w=trick[0];for(let i=1;i<trick.length;i++){const t=trick[i],c=t.card,wc=w.card;if(c.s===wc.s){if(c.r>wc.r)w=t;}else if(trump<4&&c.s===trump)w=t;}return w.seat;}
 function playCard(ps,seat,card){const h=ps.hands[seat];const i=h.indexOf(card);if(i<0)return false;h.splice(i,1);ps.trick.push({seat,card});ps.played.add(card.id);ps.dummyVisible=true;ps.turn=(seat+1)%4;return true;}
@@ -990,6 +990,7 @@ function chooseCard(ps,seat,rng){
   if(legal.length===1)return{card:legal[0],reason:'Dit is je enige speelbare kaart.'};
   const decl=ct.declarer,partner=(seat+2)%4;
   const defending=(seat%2)!==(decl%2);
+  if(ps.level==='adv'&&!defending&&ps.played.size>0){let r=null;try{r=declAdv(ps,seat,rng);}catch(e){r=null;}if(r&&r.card&&legal.indexOf(r.card)>=0)return r;}
   const ours=new Set(hand.map(c=>c.id));
   if(!defending)for(const c of ps.hands[partner])ours.add(c.id);
   const isMaster=c=>{for(let r=c.r+1;r<=14;r++){const id=c.s*13+r-2;if(!ps.played.has(id)&&!ours.has(id))return false;}return true;};
@@ -1049,6 +1050,179 @@ function chooseCard(ps,seat,rng){
   if(trump<4){const tw=asc(legal.filter(c=>c.s===trump&&beats(c)));if(tw.length)return{card:tw[0],reason:'Je hebt de gevraagde kleur niet meer (renonce): troef in!'};}
   return{card:discard(),reason:'Je kunt niet bekennen en niet winnen: gooi je minst waardevolle kaart weg.'};
 }
+/* ======================================================================
+   AFSPELEN GEVORDERD (leider): speelplan, troeven in de korte hand,
+   troef trekken, snit, hold-up, kleur ontwikkelen, kansberekening.
+   ====================================================================== */
+const BREAK_ODDS={2:[[1,1,52],[2,0,48]],3:[[2,1,78],[3,0,22]],4:[[2,2,41],[3,1,50],[4,0,10]],5:[[3,2,68],[4,1,28],[5,0,4]],6:[[3,3,36],[4,2,48],[5,1,15],[6,0,1]],7:[[4,3,62],[5,2,31],[6,1,7],[7,0,0.5]],8:[[5,3,47],[4,4,33],[6,2,17],[7,1,3]]};
+function breakText(n){const o=BREAK_ODDS[n];if(!o)return'';return o.slice(0,2).map(([a,b,p])=>`${a}-${b} ${p}%`).join(', ');}
+/* Kans dat de uitstaande kaarten in een kleur zo verdeeld zijn dat de langste rest ≤ m kaarten heeft */
+function sideInfo(ps,seat){
+  const pa=(seat+2)%4,mine=ps.hands[seat],his=ps.hands[pa];
+  const ours=new Set(mine.concat(his).map(c=>c.id));
+  const outR=s=>{const r=[];for(let k=2;k<=14;k++){const id=s*13+k-2;if(!ps.played.has(id)&&!ours.has(id))r.push(k);}return r;};
+  const suit=(h,s)=>h.filter(c=>c.s===s).sort((a,b)=>b.r-a.r);
+  const above=(s,r)=>outR(s).filter(x=>x>r).length;
+  const sure=s=>{const a=suit(mine,s),b=suit(his,s);const all=a.concat(b).sort((x,y)=>y.r-x.r);let k=0;for(const c of all){if(above(s,c.r)===0)k++;else break;}return Math.min(k,Math.max(a.length,b.length));};
+  return{pa,mine,his,outR,suit,above,sure};
+}
+/* Een vork in hand B die je via een kleine kaart uit hand A kunt snijden */
+/* Is snijden met kaart c (k ontbrekende hogere kaarten) beter dan aftoppen? */
+function finesseOK(I,s,c,k){
+  if(c.r<10||k<1||k>2)return false;
+  const out=I.outR(s),n=out.length,miss=out.filter(r=>r>c.r).sort((x,y)=>y-x)[0];
+  if(k===1&&miss===12&&n<=4)return false;        // 9 kaarten zonder de vrouw: aftoppen
+  if(k===1&&miss===11&&n<=4)return false;
+  if(k===1&&miss===13&&n<=2)return false;        // 11 kaarten zonder de heer: aftoppen
+  return true;
+}
+function tenaceIn(I,B,A,s){
+  const b=I.suit(B,s),a=I.suit(A,s);if(!b.length||!a.length)return null;
+  if(a.some(x=>I.above(s,x.r)===0))return null;   // eerst je eigen hoge kaart spelen
+  for(let i=b.length-1;i>=0;i--){const c=b[i];const k=I.above(s,c.r);if(k===0)continue;
+    const hasMasterAbove=b.some(x=>x.r>c.r&&I.above(s,x.r)===0);
+    const small=a.filter(x=>x.r<c.r);if(!small.length)continue;
+    // geen eigen kaart tussen c en de gemiste honneur(s) in hand A
+    if(!finesseOK(I,s,c,k))continue;
+    if(k===1&&(hasMasterAbove||c.r===13&&b.length>=2))return{card:c,k,small:small[small.length-1],p:50,kind:c.r===13&&!hasMasterAbove?'snit op de heer':'snit'};
+    if(k===2&&hasMasterAbove&&b.some(x=>x.r===c.r-1||(I.outR(s).indexOf(c.r-1)<0&&x.r===c.r-2)))return{card:c,k,small:small[small.length-1],p:76,kind:'dubbele snit'};
+  }
+  return null;
+}
+function declAdv(ps,seat,rng){
+  const ct=ps.contract,t=ct.strain,decl=ct.declarer,dummy=(decl+2)%4,I=sideInfo(ps,seat),pa=I.pa;
+  const hand=ps.hands[seat],trick=ps.trick,legal=legalCards(hand,trick);
+  if(legal.length<=1)return null;
+  const side=decl%2,need=ct.level+6-ps.tricks[side];
+  const N=sym,SN=SUIT_NAME;
+  let sureTot=0;for(let s=0;s<4;s++){if(s===t)continue;sureTot+=I.sure(s);}
+  if(t<4){const tr=I.suit(I.mine,t).length,tr2=I.suit(I.his,t).length,o=I.outR(t).length;sureTot+=o===0?Math.max(tr,tr2):Math.max(0,Math.max(tr,tr2)-o);}
+  const enough=sureTot>=need;
+  const asc=a=>a.slice().sort((x,y)=>x.r-y.r);
+  const low=(s,h)=>asc(I.suit(h||hand,s))[0];
+  // ---------------- uitkomen ----------------
+  if(!trick.length){
+    if(t<4){
+      const myT=I.suit(I.mine,t).length,hisT=I.suit(I.his,t).length,outT=I.outR(t);
+      const LT=myT>hisT||(myT===hisT&&seat===decl)?seat:pa,ST=LT===seat?pa:seat;
+      const LTh=ps.hands[LT],STh=ps.hands[ST],stT=I.suit(STh,t).length;
+      // 1. verliezers introeven in de korte troefhand
+      if(stT>=1){
+        for(const s of [0,1,2,3]){if(s===t)continue;
+          if(I.suit(STh,s).length===0&&I.suit(LTh,s).some(c=>I.above(s,c.r)>0)){
+            const losers=I.suit(LTh,s).filter(c=>I.above(s,c.r)>0).length;
+            const needRuff=!enough||outT.length>0;
+            if(!needRuff)continue;
+            if(seat===LT){const c=low(s);return{card:c,reason:`Troef een verliezer in de korte hand: speel ${N(s)} zodat ${SEAT_NAME[ST]} (renonce, nog ${stT} troef) kan introeven. Dat levert een extra slag op, want de troeven van de korte hand tellen anders niet mee.`};}
+            // aan slag in de korte hand: oversteken naar de lange hand
+            for(const q of [3,2,1,0]){if(q===t||q===s)continue;const sm=low(q);if(sm&&I.suit(LTh,q).some(c=>I.above(q,c.r)===0)&&!I.suit(hand,q).some(c=>I.above(q,c.r)===0))return{card:sm,reason:`Steek over naar ${SEAT_NAME[LT]} (vaste slag in ${SN[q]}), zodat je daarna ${SN[s]} kunt introeven in de korte hand.`};}
+          }
+        }
+      }
+      // 2. troef trekken
+      if(outT.length&&(myT||hisT)){
+        const ourTop=Math.max(...I.suit(I.mine.concat(I.his),t).map(c=>c.r));
+        const allTopOut=outT.every(r=>r>ourTop);
+        if(!allTopOut&&myT){
+          const ten=tenaceIn(I,I.his,I.mine,t);
+          if(ten)return{card:ten.small,reason:`Troef trekken met een ${ten.kind}: speel klein naar ${N(t)}${rankLbl(ten.card.r)} van ${SEAT_NAME[pa]}. Zit de ontbrekende honneur links, dan wint de snit (kans ${ten.p}%).`};
+          const m=I.suit(hand,t).filter(c=>I.above(t,c.r)===0);
+          if(m.length)return{card:m[0],reason:`Trek troef met je hoogste troef: de tegenstanders hebben er nog ${outT.length} (verdeling ${breakText(outT.length)}).`};
+          if(outT.length<=myT+hisT)return{card:low(t),reason:`Trek troef: de tegenstanders hebben er nog ${outT.length}.`};
+        }
+      }
+    }
+    // 3. contract binnen → vaste slagen incasseren (korte hand eerst)
+    const masters=legal.filter(c=>I.above(c.s,c.r)===0&&(t>=4||c.s!==t));
+    if(enough&&masters.length){
+      masters.sort((x,y)=>I.suit(hand,x.s).length-I.suit(hand,y.s).length||y.r-x.r);
+      const c=masters.find(m=>{const hisM=I.suit(I.his,m.s).filter(x=>I.above(m.s,x.r)===0).length;return !(hisM&&I.suit(I.his,m.s).length<I.suit(hand,m.s).length);})||masters[0];
+      return{card:c,reason:`Je hebt genoeg vaste slagen (${sureTot}, nodig ${need}): incasseer ze, begin in de korte hand zodat de kleur niet blokkeert.`};
+    }
+    // 4. snit naar een vork van partner
+    let bestT=null;
+    for(const s of [3,2,1,0]){if(s===t&&I.outR(t).length===0)continue;const ten=tenaceIn(I,I.his,I.mine,s);if(ten&&(!bestT||ten.p>bestT.p||(ten.p===bestT.p&&I.suit(I.mine.concat(I.his),s).length>I.suit(I.mine.concat(I.his),bestT.s).length)))bestT=Object.assign({s},ten);}
+    if(bestT)return{card:bestT.small,reason:`Speel klein naar de vork van ${SEAT_NAME[pa]} (${N(bestT.s)}${rankLbl(bestT.card.r)}): een ${bestT.kind}. Speelt links klein, dan leg je ${rankLbl(bestT.card.r)}. Kans ${bestT.p}%.`};
+    // 5. lange kleur ontwikkelen
+    let dev=null;
+    for(const s of [3,2,1,0]){if(s===t)continue;const a=I.suit(hand,s),b=I.suit(I.his,s);if(!a.length)continue;const len=a.length+b.length,mx=Math.max(a.length,b.length),gain=mx-I.sure(s);if(gain<=0)continue;
+      const cost=Math.max(0,Math.ceil(I.outR(s).length/2)-I.sure(s)),net=gain-cost;const sc=net*10-cost*4+len+(a.length<=b.length?2:0);if(!dev||sc>dev.sc)dev={s,sc,len,gain};}
+    if(dev){
+      const s=dev.s,a=I.suit(hand,s),b=I.suit(I.his,s);
+      const m=a.filter(c=>I.above(s,c.r)===0);
+      const shortHas=a.length<=b.length;
+      if(m.length&&shortHas)return{card:m[m.length-1],reason:`Ontwikkel ${SN[s]} (samen ${dev.len} kaarten): eerst de hoge kaart uit de korte hand.`};
+      // honneurreeks: drijf de hogere kaart uit
+      const seq=a.filter(c=>c.r>=10&&I.above(s,c.r)>0&&a.some(x=>x.r<c.r&&I.above(s,x.r)===I.above(s,c.r)));
+      if(seq.length&&!m.length)return{card:seq[0],reason:`Drijf de ${I.above(s,seq[0].r)===1?'hogere honneur':'hogere honneurs'} van de tegenstanders uit met ${N(s)}${rankLbl(seq[0].r)}: daarna zijn je andere ${SN[s]} vaste slagen.`};
+      const out=I.outR(s).length;
+      if(m.length&&!shortHas&&b.length&&b.some(c=>I.above(s,c.r)===0))return{card:low(s),reason:`Ontwikkel ${SN[s]}: klein naar de hoge kaart in de korte hand (${SEAT_NAME[pa]}).`};
+      if(m.length)return{card:m[0],reason:`Ontwikkel ${SN[s]}: incasseer de hoge kaarten; met een ${breakText(out).split(',')[0]} verdeling worden de kleintjes ook slagen.`};
+      return{card:low(s),reason:`Ontwikkel ${SN[s]} (samen ${dev.len} kaarten): geef een slag af zodat de rest van de kleur vrij komt (verdeling ${breakText(out)}).`};
+    }
+    return null;
+  }
+  // ---------------- bijspelen ----------------
+  const led=trick[0].card.s,pos=trick.length;
+  const wSeat=trickWinner(trick,t),wCard=trick.find(x=>x.seat===wSeat).card;
+  const oppLed=trick[0].seat%2!==side;
+  const follow=legal[0].s===led;
+  if(!follow)return null;
+  const beats=c=>c.s===wCard.s?c.r>wCard.r:(t<4&&c.s===t);
+  const winners=asc(legal.filter(beats));
+  // hold-up in SA
+  if(t===4&&oppLed&&wSeat%2!==side&&winners.length){
+    const s=led,all=I.suit(I.mine.concat(I.his),s),stoppers=I.sure(s);
+    const ourCount=all.length+ps.history.reduce((n,h)=>n+h.cards.filter(x=>x.seat%2===side&&x.card.s===s).length,0);
+    const allowed=13-ourCount>=8?2:13-ourCount>=6?1:0;
+    const ducked=ps.history.filter(h=>h.cards[0].card.s===s&&h.cards[0].seat%2!==side&&h.winner%2!==side).length;
+    const cheapestWin=winners[0];
+    if(stoppers===1&&I.above(s,cheapestWin.r)===0&&ducked<allowed&&!enough&&hand.filter(c=>c.s===s).length>=2&&(pos===3||(pos===1&&I.suit(I.his,s).every(c=>I.above(s,c.r)>0))))
+      return{card:low(s),reason:`Hold-up: je hebt maar één stopper in ${SN[s]}. Laat deze slag lopen (${ducked+1}e keer), zodat de tegenstander met de lange ${SN[s]} straks geen ${SN[s]} meer naar zijn partner kan spelen.`};
+  }
+  // derde hand (partner van de leider kwam uit): snit of zo goedkoop mogelijk winnen
+  if(pos===2&&trick[0].seat===pa){
+    const ledCard=trick[0].card,second=trick[1].card,secondFollowed=second.s===led;
+    if(wSeat===pa&&I.above(led,ledCard.r)===0)return{card:asc(legal)[0],reason:'De slag is al binnen: speel klein bij.'};
+    if(winners.length&&ledCard.r<11){
+      const sureW=winners.filter(c=>I.above(led,c.r)===0);
+      const fin=winners.filter(c=>{const k=I.above(led,c.r);if(!finesseOK(I,led,c,k))return false;return k===1&&hand.some(x=>x.s===led&&x.r>c.r&&I.above(led,x.r)===0)||k===2&&hand.some(x=>x.s===led&&x.r>c.r&&I.above(led,x.r)===0)&&(hand.some(x=>x.s===led&&x.r===c.r-1));});
+      if(fin.length&&!(enough&&sureW.length)&&secondFollowed){const c=fin[0],k=I.above(led,c.r);return{card:c,reason:`${k===1?'Snit':'Dubbele snit'}: links speelde klein, dus leg je ${N(led)}${rankLbl(c.r)}. Zit de ontbrekende honneur links, dan wint deze kaart (kans ${k===1?50:76}%).`};}
+      if(sureW.length)return{card:sureW[0],reason:'Win de slag zo goedkoop mogelijk met een vaste kaart.'};
+    }
+  }
+  // vierde hand: zo goedkoop mogelijk winnen
+  if(pos===3&&winners.length&&wSeat%2!==side)return{card:winners[0],reason:'Vierde hand: win de slag met de goedkoopste kaart die volstaat.'};
+  return null;
+}
+/* Speelplan voor de coach (leider), na de uitkomst. */
+function playPlan(ps){
+  const ct=ps.contract,t=ct.strain,d=ct.declarer,I=sideInfo(ps,d),need=ct.level+6;
+  const N=sym,SN=SUIT_NAME,parts=[];let sure=0;
+  for(const s of [3,2,1,0]){if(s===t)continue;const k=I.sure(s);sure+=k;if(k)parts.push(`${N(s)} ${k}`);}
+  const out=[];
+  if(t<4){
+    const LT=I.suit(I.mine,t).length>=I.suit(I.his,t).length?I.mine:I.his,ST=LT===I.mine?I.his:I.mine,lName=LT===I.mine?SEAT_NAME[d]:SEAT_NAME[(d+2)%4],sName=LT===I.mine?SEAT_NAME[(d+2)%4]:SEAT_NAME[d];
+    let los=0;const ls=[];
+    for(const s of [3,2,1,0]){const a=I.suit(LT,s),b=I.suit(ST,s);let l=0;const top=a.slice(0,3);for(let i=0;i<top.length;i++){const c=top[i];const covered=I.above(s,c.r)<=i||b.some(x=>x.r>c.r&&I.above(s,x.r)<=i);if(!covered)l++;}if(l){los+=l;ls.push(`${N(s)} ${l}`);}}
+    const allowed=13-need;
+    out.push(`<b>Speelplan (troefcontract ${N(t)}):</b> tel de verliezers in de lange troefhand (${lName}): ongeveer <b>${los}</b>${ls.length?` (${ls.join(', ')})`:''}. Je mag er ${allowed} verliezen.`);
+    const ruffs=[0,1,2,3].filter(s=>s!==t&&I.suit(ST,s).length<=1&&I.suit(LT,s).length>I.suit(ST,s).length&&I.suit(ST,t).length>=1);
+    if(los>allowed&&ruffs.length)out.push(`Verliezers wegwerken: troef ${ruffs.map(s=>SN[s]).join(' en ')} in de korte hand (${sName}) <i>voordat</i> je alle troeven trekt.`);
+    else out.push(`Begin met troef trekken; de tegenstanders hebben ${I.outR(t).length} troeven (${breakText(I.outR(t).length)}).`);
+  }else{
+    out.push(`<b>Speelplan (Sans Atout):</b> tel je vaste slagen: <b>${sure}</b> (${parts.join(', ')||'geen'}). Je hebt er ${need} nodig${sure>=need?': incasseer ze en neem geen risico.':`, dus je moet er <b>${need-sure}</b> bij maken.`}`);
+    if(ps.history.length===0&&ps.trick.length){const s=ps.trick[0].card.s;const stH=[I.mine,I.his].find(x=>x.some(c=>c.s===s&&I.above(s,c.r)===0));if(I.sure(s)===1&&stH&&I.suit(stH,s).length>=2&&I.suit(I.mine.concat(I.his),s).length<=6)out.push(`Uitkomst in ${SN[s]} en je hebt daar maar één stopper: overweeg een <b>hold-up</b> (laat de eerste slag(en) lopen).`);}
+  }
+  const ideas=[];
+  for(const s of [3,2,1,0]){
+    for(const [A,B,nm] of [[I.mine,I.his,SEAT_NAME[(d+2)%4]],[I.his,I.mine,SEAT_NAME[d]]]){const ten=tenaceIn(I,B,A,s);if(ten){ideas.push(`${ten.kind} in ${N(s)} (${N(s)}${rankLbl(ten.card.r)} bij ${nm}, ${ten.p}%)`);break;}}
+    if(s!==t){const a=I.suit(I.mine,s),b=I.suit(I.his,s),mx=Math.max(a.length,b.length);if(mx>=4&&a.length+b.length>=7&&mx>I.sure(s))ideas.push(`lange ${SN[s]} vrijspelen (tegenpartij heeft er ${I.outR(s).length}: ${breakText(I.outR(s).length)})`);}
+  }
+  if(ideas.length&&!(t===4&&sure>=need))out.push(`Extra slagen: ${ideas.slice(0,3).join('; ')}.`);
+  return out.join('<br>');
+}
+
 /* ---------- score ---------- */
 function scoreContract(level,strain,dbl,vul,tricks){
   const need=level+6;
@@ -1084,7 +1258,7 @@ function simulateTable(deal,board,rng,level){
   while(!auctionOver(st.auction)&&g++<80){let r=null;try{r=aiBidL(st,seat,jit[seat],level);}catch(e){r=null;}st.auction.push(annotateCall(st.auction,sanitizeCall(st.auction,r&&r.call,seat),level));seat=(seat+1)%4;}
   const ct=contractOf(st.auction);
   if(!ct)return{score:0,ct:null,tricks:0};
-  const ps=newPlayState(deal,ct,st.auction);
+  const ps=newPlayState(deal,ct,st.auction,level);
   for(let i=0;i<52;i++){const s=ps.turn;let r=null;try{r=chooseCard(ps,s,rng);}catch(e){r=null;}let card=r&&r.card;const leg=legalCards(ps.hands[s],ps.trick);if(!card||leg.indexOf(card)<0)card=leg[0];playCard(ps,s,card);if(ps.trick.length===4)completeTrick(ps);}
   const dt=ps.tricks[ct.declarer%2];const vul=vulOf(board);const v=ct.declarer%2===0?vul.ns:vul.ew;
   const sc=scoreContract(ct.level,ct.strain,ct.dbl,v,dt);
@@ -1427,7 +1601,7 @@ function boardSig(t){t=t||T;return t?t.board+'|'+(t.replay?'r':'')+'|'+toArr(t.d
 /* ---------- afgeleide gegevens ---------- */
 function handsOf(t){return toArr(t.deal).map(h=>sortHand(toArr(h).map(id=>CARD[id])));}
 function buildPS(t,n,hold){
-  const ps=newPlayState(handsOf(t),t.play.contract,toArr(t.auction));
+  const ps=newPlayState(handsOf(t),t.play.contract,toArr(t.auction),t.level);
   const plays=toArr(t.play.plays);
   for(let i=0;i<n;i++){const p=plays[i];playCard(ps,p.seat,CARD[p.id]);if(ps.trick.length===4&&!(i===n-1&&hold))completeTrick(ps);}
   return ps;
@@ -1578,7 +1752,7 @@ function aiPlayNow(){
 function showAltsFor(seat){return T.mode==='solo'&&(seat===2||(seat===0&&T.play&&T.play.contract.declarer%2===0)||LOCAL.autoplay&&seat%2===0);}
 
 /* ---------- verwachte uitkomst (doorspelen zoals de computer) ---------- */
-function clonePS(ps){return{hands:ps.hands.map(h=>h.slice()),contract:ps.contract,auction:ps.auction,trick:ps.trick.slice(),history:ps.history.slice(),played:new Set(ps.played),dummyVisible:ps.dummyVisible,leader:ps.leader,turn:ps.turn,tricks:ps.tricks.slice()};}
+function clonePS(ps){return{level:ps.level,hands:ps.hands.map(h=>h.slice()),contract:ps.contract,auction:ps.auction,trick:ps.trick.slice(),history:ps.history.slice(),played:new Set(ps.played),dummyVisible:ps.dummyVisible,leader:ps.leader,turn:ps.turn,tricks:ps.tricks.slice()};}
 function rollout(p){
   let g=0;
   while(g++<80){
@@ -1712,7 +1886,9 @@ function narrate(){
       if(!quiet&&plays.length===1){LOCAL.dummyRevealAt=Date.now()+DUMMY_DELAY;setTimeout(()=>{render();schedule();},DUMMY_DELAY+60);}else LOCAL.dummyRevealAt=0;
       if(!quiet){const p=plays[0],ct=T.play.contract,d=ct.declarer,dm=(d+2)%4;
         coach('info',`${whoText(p.seat)} komt uit met <b>${cardTxt(CARD[p.id])}</b>. De dummy (${SEAT_NAME[dm]}) gaat zo open op tafel.`);
-        if(d%2===MYSEAT%2&&(d===MYSEAT||T.mode==='solo')){const tt=topTricks(handsOf(T),d),need=ct.level+6;
+        if(d%2===MYSEAT%2&&(d===MYSEAT||T.mode==='solo')&&T.level==='adv'){const sig0=boardSig(T);let plan='';try{plan=playPlan(psOf(T));}catch(e){plan='';}
+          if(plan)setTimeout(()=>{if(T&&boardSig(T)===sig0){coach('tip',plan);try{renderCoach();}catch(e){}}},plays.length===1?DUMMY_DELAY+150:0);}
+        else if(d%2===MYSEAT%2&&(d===MYSEAT||T.mode==='solo')){const tt=topTricks(handsOf(T),d),need=ct.level+6;
           coach('tip',`Tel je vaste slagen: ongeveer <b>${tt.tot}</b> (${tt.parts.join(', ')||'geen'}). Je hebt er ${need} nodig${tt.tot<need?`; zoek nog ${need-tt.tot} extra via een lange kleur, een snit of introeven.`:'.'}`);}}
     }
     SEEN.plays=plays.length;
@@ -2443,7 +2619,7 @@ function showTips(){
 <li><b>De snit:</b> speel naar je honneur toe. Met A-V tegenover kleine kaarten speel je klein naar de V; zit de H links, dan maak je twee slagen.</li>
 <li><b>Kwetsbaarheid:</b> een rode naam is kwetsbaar. Down gaan kost dan meer, maar een gehaalde manche levert ook meer op (600+ in plaats van 400+).</li>
 <li><b>De dummy:</b> na de uitkomst legt de partner van de leider zijn kaarten open. De leider speelt beide handen.</li></ol>
-<h3 style="margin:1rem 0 .3rem">🎓 Niveau Gevorderd: de conventies</h3>
+<h3 style="margin:1rem 0 .3rem">🎓 Niveau Gevorderd: conventies en afspelen</h3>
 <p class="ex-note">Kies het niveau bij ⚙ Instellingen. Een bod met <b>⚠</b> is kunstmatig: tik erop om de betekenis te zien.</p>
 <ol class="tips">
 <li><b>Openingen:</b> 1SA = 15-17 evenwichtig · 2SA = 20-21 · <b>2${sym(0)}</b> = sterk (22+ of 9 vaste slagen), mancheforcing; partner antwoordt meestal 2${sym(1)} (relais).</li>
@@ -2459,6 +2635,11 @@ function showTips(){
 <li><b>Informatiedoublet:</b> doublet direct op een opening van 1 in een kleur = 12+ punten, kort in die kleur, steun voor de rest. Partner moet bieden.</li>
 <li><b>Michaels / Unusual 2SA / Landy:</b> 1${sym(0)}–2${sym(0)} of 1${sym(1)}–2${sym(1)} = beide hoge kleuren · 1${sym(2)}–2${sym(2)} = schoppen + een lage kleur · 2SA = de twee laagste ongeboden kleuren · 1SA–2${sym(0)} = beide hoge kleuren.</li>
 <li><b>Handwaardering:</b> met een fit tellen korte kleuren mee (renonce 5, singleton 3, doubleton 1); losse honneurs (H, V-x) in een korte kleur tellen minder.</li>
+<li><b>Afspelen – speelplan:</b> tel in SA je vaste slagen, in een troefcontract de verliezers in de lange troefhand. Pas dan kies je de techniek.</li>
+<li><b>Introeven in de korte hand:</b> troef verliezers in de hand met de minste troeven, vóór je alle troeven trekt. Introeven in de lange hand levert niets extra op.</li>
+<li><b>De snit:</b> speel klein náár de vork (A-V, A-B-10, H-x). Kans 50%; de dubbele snit met A-B-10 slaagt in 76%. Mis je alleen de vrouw met 9 kaarten samen, top dan af ("acht snijden, negen nooit").</li>
+<li><b>Hold-up:</b> in SA met één stopper (A-x-x) laat je de eerste slag(en) in de kleur van de tegenpartij lopen, zodat de lange hand zijn partner niet meer kan bereiken.</li>
+<li><b>Verdelingskansen:</b> 2 kaarten buiten: 1-1 52% · 3: 2-1 78% · 4: 2-2 41%, 3-1 50% · 5: 3-2 68%, 4-1 28% · 6: 4-2 48%, 3-3 36%.</li>
 <li><b>Wet van de Totale Slagen:</b> in de strijd mag je bieden tot het niveau van jullie aantal troeven min 6 (8 troeven → 2-niveau, 9 → 3-niveau).</li></ol>`);
 }
 
@@ -2466,7 +2647,7 @@ function showSettings(){
   const cfgTxt=(()=>{try{return localStorage.getItem('hbt-fbconfig')||'';}catch(e){return'';}})();
   openModal('⚙ Instellingen',`<div class="setrow" style="flex-wrap:wrap"><label>Kleur speellaken</label><div class="feltrow">${FELTS.map(([n,c])=>`<button class="feltsw ${String(S.felt).toLowerCase()===c?'on':''}" data-set="felt" data-color="${c}" title="${n}" aria-label="${n}" style="background:radial-gradient(circle at 40% 35%,${mixHex(c,'w',0.2)},${c} 60%,${mixHex(c,'b',0.35)})"></button>`).join('')}<label class="feltpick" title="Eigen kleur kiezen">🎨<input type="color" id="feltc" value="${esc(S.felt||'#16703f')}"></label></div></div>
 <div class="setrow"><label for="slv">Spelniveau</label><select id="slv"><option value="beg" ${S.level!=='adv'?'selected':''}>Beginner (eenvoudig biedsysteem)</option><option value="adv" ${S.level==='adv'?'selected':''}>Gevorderd (conventies)</option></select></div>
-<p class="ex-note" style="margin:-.2rem 0 .5rem">Gevorderd: 2♣ sterk, Multi 2♦, Muiderberg, Stayman, transfers, Texas, Gerber, splinter, vierde kleur, Checkback, RKCB 1430, negatief doublet, Michaels, Unusual 2SA, Landy. Kunstmatige biedingen krijgen een ⚠ alert. Biedadvies krijg je alleen als je op 💡 Hint tikt. Het niveau geldt vanaf het volgende spel${T&&T.mode==='online'&&!isHost()?'; aan een online tafel kiest de gastheer het niveau':''}.</p>
+<p class="ex-note" style="margin:-.2rem 0 .5rem">Gevorderd: 2♣ sterk, Multi 2♦, Muiderberg, Stayman, transfers, Texas, Gerber, splinter, vierde kleur, Checkback, RKCB 1430, negatief doublet, Michaels, Unusual 2SA, Landy. Kunstmatige biedingen krijgen een ⚠ alert. De computer speelt als leider met speelplan, snit, hold-up en introeven; jij krijgt een speelplan van de coach. Biedadvies krijg je alleen als je op 💡 Hint tikt. Het niveau geldt vanaf het volgende spel${T&&T.mode==='online'&&!isHost()?'; aan een online tafel kiest de gastheer het niveau':''}.</p>
 <div class="setrow"><label for="sz">Tekstgrootte</label><select id="sz">${[[0.9,'Klein'],[1,'Normaal'],[1.15,'Groot'],[1.3,'Extra groot'],[1.45,'Heel groot']].map(([v,n])=>`<option value="${v}" ${(+S.uiScale||1)===v?'selected':''}>${n}</option>`).join('')}</select></div>
 <div class="setrow"><label for="sd">Kaartontwerp</label><select id="sd"><option value="knoll" ${S.deck!=='eigen'?'selected':''}>Klassiek (Byron Knoll)</option><option value="eigen" ${S.deck==='eigen'?'selected':''}>Hollandse tekeningen</option></select></div>
 <div class="setrow"><label for="sa">Azen met Nederlandse gebouwen</label><input type="checkbox" id="sa" ${S.dutchAces?'checked':''}></div>
