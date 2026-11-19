@@ -228,6 +228,7 @@ html.bigtext .topstats>span:nth-child(3){display:none}
       <div class="kv"><span>Spel</span><b id="sbBoard">1</b></div>
       <div class="kv"><span>Gever</span><b id="sbDealer">-</b></div>
       <div class="kv"><span>Kwetsbaar</span><b id="sbVul">-</b></div>
+      <div class="kv"><span>Spelnummer</span><b id="sbNum">-</b></div>
       <div class="kv"><span>Aan de beurt</span><b id="sbTurn">-</b></div>
     </div>
     <div class="panel">
@@ -247,6 +248,7 @@ html.bigtext .topstats>span:nth-child(3){display:none}
         <button class="btn" id="btnFreq">📊 Frequentiestaat</button>
         <button class="btn" id="btnOnline">👥 Samen spelen</button>
         <button class="btn" id="btnResults">📈 Mijn resultaten</button>
+        <button class="btn" id="btnNumber">🔢 Spelnummer</button>
         <button class="btn" id="btnTips">📘 Bridge-tips</button>
         <button class="btn" id="btnSettings">⚙ Instellingen</button>
         <button class="btn" id="btnDonate" style="display:none">☕ Steun deze app</button>
@@ -642,6 +644,13 @@ function scoreContract(level,strain,dbl,vul,tricks){
   if(dbl===2)pen*=2;return -pen;
 }
 function resultText(ct,tricks){const d=tricks-(ct.level+6);return d===0?'=':d>0?'+'+d:String(d);}
+/* Spelnummers: een nummer bepaalt de kaarten, de gever en de kwetsbaarheid.
+   n = 16*m + positie(0-15); m even = gunstige deling voor NZ. */
+function boardOfNumber(n){return ((n%16)+16)%16+1;}
+function dealNumFavor(n){return Math.floor(n/16)%2===0;}
+function makeDealNumber(board,favor,rng){const b16=((board-1)%16+16)%16;let m=1000+Math.floor((rng||Math.random)()*60000);if((m%2===0)!==!!favor)m++;return 16*m+b16;}
+function validDealNumber(n){return Number.isInteger(n)&&n>=16000&&n<=999999;}
+function dealFromNumber(n){const rng=mulberry32((Math.imul(n>>>0,2654435761)^0x5bd1e995)>>>0);return dealHands(rng,dealNumFavor(n));}
 function simulateTable(deal,board,rng){
   const st={hands:deal.map(h=>h.slice()),auction:[]};
   const jit=[0,1,2,3].map(()=>Math.floor(rng()*3)-1);
@@ -974,6 +983,7 @@ function toast(t){const el=$('toast');el.innerHTML=colorize(esc(t),true);el.clas
    SPELVERLOOP – één serialiseerbare tafelstatus T (solo én online)
    ====================================================================== */
 const CARD=[];for(let s=0;s<4;s++)for(let r=2;r<=14;r++)CARD[s*13+r-2]={s,r,id:s*13+r-2};
+const BP=t=>(t&&(t.bpos||t.board))||1;
 const toArr=x=>Array.isArray(x)?x:(x&&typeof x==='object'?Object.keys(x).sort((a,b)=>a-b).map(k=>x[k]):[]);
 const PLAIN=t=>String(t).replace(/︎/g,'');
 let T=null;                                   // de tafel
@@ -1033,10 +1043,15 @@ function makeTable(mode,seats){
   return{v:2,mode,board:1,dealNo:0,deal:null,auction:[],bidNotes:[],turn:0,phase:'bidding',play:null,result:null,
     seats:seats||[{type:'ai'},{type:'ai'},{type:'human',uid:ME.uid,name:ME.name},{type:'ai'}],session:[],replay:false,ts:Date.now()};
 }
-function startBoard(t,board,same){
-  t.board=board;
-  if(!same||!t.deal){t.deal=dealHands(Math.random,S.favorNS&&t.mode==='solo').map(h=>h.map(c=>c.id));t.dealNo=(t.dealNo||0)+1;}
-  t.replay=!!same;t.auction=[];t.bidNotes=[];t.turn=dealerOf(board);t.phase='bidding';t.play=null;t.result=null;t.ts=Date.now();
+function startBoard(t,board,same,num,opts){
+  t.board=board;opts=opts||{};
+  if(!same||!t.deal){
+    const n=validDealNumber(num)?num:makeDealNumber(board,S.favorNS&&t.mode==='solo',Math.random);
+    t.dealNum=n;t.bpos=boardOfNumber(n);t.deal=dealFromNumber(n).map(h=>h.map(c=>c.id));t.dealNo=(t.dealNo||0)+1;
+  }
+  if(!t.bpos)t.bpos=t.board;
+  t.compare=opts.compare||null;
+  t.replay=!!same||!!opts.replay;t.auction=[];t.bidNotes=[];t.turn=dealerOf(t.bpos);t.phase='bidding';t.play=null;t.result=null;t.ts=Date.now();
 }
 
 /* ---------- acties (alleen de gastheer/solo past ze toe) ---------- */
@@ -1078,14 +1093,14 @@ function applyAction(a){
 }
 function seedFromDeal(d){let h=2166136261;d.forEach((hand,s)=>hand.forEach(c=>{h^=c.id*7+s;h=Math.imul(h,16777619);}));return h>>>0;}
 function finishBoard(passed){
-  const b=T.board,vul=vulOf(b),deal=handsOf(T);
+  const b=T.board,bp=BP(T),vul=vulOf(bp),deal=handsOf(T);
   let scoreNS=0,ct=null,tricks=0;
   if(!passed){const ps=buildPS(T,toArr(T.play.plays).length,false);ct=T.play.contract;tricks=ps.tricks[ct.declarer%2];const v=ct.declarer%2===0?vul.ns:vul.ew;const sc=scoreContract(ct.level,ct.strain,ct.dbl,v,tricks);scoreNS=ct.declarer%2===0?sc:-sc;}
-  const rng=mulberry32(seedFromDeal(deal)+b*977);const field=[];
-  for(let i=0;i<FIELD;i++){try{const f=simulateTable(deal,b,rng);field.push({score:f.score,ct:f.ct?{level:f.ct.level,strain:f.ct.strain,dbl:f.ct.dbl,declarer:f.ct.declarer}:null,tricks:f.tricks});}catch(e){}}
+  const rng=mulberry32((T.dealNum||seedFromDeal(deal))+bp*977);const field=[];
+  for(let i=0;i<FIELD;i++){try{const f=simulateTable(deal,bp,rng);field.push({score:f.score,ct:f.ct?{level:f.ct.level,strain:f.ct.strain,dbl:f.ct.dbl,declarer:f.ct.declarer}:null,tricks:f.tricks});}catch(e){}}
   let mp=0;for(const f of field)mp+=scoreNS>f.score?2:scoreNS===f.score?1:0;
   const pct=field.length?mp/(2*field.length)*100:50;
-  T.result={board:b,ct,tricks,scoreNS,pct,field,passed:!!passed};
+  T.result={board:b,dealNum:T.dealNum||0,ct,tricks,scoreNS,pct,field,passed:!!passed};
   T.phase='done';
   const ss=toArr(T.session);ss.push({board:b,ct,tricks,scoreNS,pct,replay:!!T.replay});T.session=ss.slice(-200);
 }
@@ -1221,7 +1236,7 @@ function recordMyResult(){
   const ns=MYSEAT%2===0;
   const rec={ts:Date.now(),board:r.board,mode:T.mode,table:LOCAL.online?LOCAL.online.code:'',seat:MYSEAT,
     contract:r.ct?PLAIN(contractText(r.ct))+' '+SEAT_SHORT[r.ct.declarer]:'Gepast',result:r.ct?resultText(r.ct,r.tricks):'',
-    score:ns?r.scoreNS:-r.scoreNS,pct:Math.round((ns?r.pct:100-r.pct)*100)/100,replay:!!T.replay};
+    score:ns?r.scoreNS:-r.scoreNS,pct:Math.round((ns?r.pct:100-r.pct)*100)/100,replay:!!T.replay,dealNum:T.dealNum||0};
   try{const a=JSON.parse(localStorage.getItem(resKey())||'[]');a.push(rec);localStorage.setItem(resKey(),JSON.stringify(a.slice(-500)));}catch(e){}
   if(cloudOK())CLOUD.push(`users/${ME.uid}/results`,rec).catch(()=>{});
 }
@@ -1238,9 +1253,9 @@ function narrate(){
   if(SEEN.sig!==sig){
     SEEN={sig,auc:0,plays:0,contract:false,done:false,lead:false};LOCAL.adviceAt=-1;LOCAL.hintBid=null;LOCAL.hintId=null;LOCAL.explain='';
     if(!quiet){
-      const v=vulOf(T.board),h=handsOf(T)[MYSEAT],ev=evaluate(h);
-      coach('info',`<b>Spel ${T.board}${T.replay?' (opnieuw)':''}</b> · Gever: ${seatLabel(dealerOf(T.board))} · Kwetsbaar: ${v.label}.<br>Jouw hand (${SEAT_NAME[MYSEAT]}): <b>${ev.hcp} punten</b> en verdeling ${sym(3)}${ev.len[3]} ${sym(2)}${ev.len[2]} ${sym(1)}${ev.len[1]} ${sym(0)}${ev.len[0]}${ev.bal?' (evenwichtig)':''}.`);
-      if(dealerOf(T.board)===MYSEAT)coach('tip','Jij bent gever: jij mag als eerste bieden. Met 12+ punten open je; anders pas je.');
+      const v=vulOf(BP(T)),h=handsOf(T)[MYSEAT],ev=evaluate(h);
+      coach('info',`<b>Spel ${T.board}${T.replay?' (opnieuw)':''}</b>${T.dealNum?` · spelnummer ${T.dealNum}`:''} · Gever: ${seatLabel(dealerOf(BP(T)))} · Kwetsbaar: ${v.label}.<br>Jouw hand (${SEAT_NAME[MYSEAT]}): <b>${ev.hcp} punten</b> en verdeling ${sym(3)}${ev.len[3]} ${sym(2)}${ev.len[2]} ${sym(1)}${ev.len[1]} ${sym(0)}${ev.len[0]}${ev.bal?' (evenwichtig)':''}.`);
+      if(dealerOf(BP(T))===MYSEAT)coach('tip','Jij bent gever: jij mag als eerste bieden. Met 12+ punten open je; anders pas je.');
     }
   }
   const auc=toArr(T.auction);
@@ -1386,7 +1401,7 @@ function isVisible(seat){
 }
 function handOf(seat){if(!T)return[];const ps=psOf(T);return ps?ps.hands[seat]:handsOf(T)[seat];}
 function plateHTML(seat){
-  const v=vulOf(T.board),vul=seat%2===0?v.ns:v.ew;
+  const v=vulOf(BP(T)),vul=seat%2===0?v.ns:v.ew;
   let turn=false;
   if(T.phase==='bidding'&&!auctionOver(toArr(T.auction)))turn=T.turn===seat;
   if(T.phase==='play'&&T.play&&!T.play.hold)turn=psOf(T).turn===seat;
@@ -1394,12 +1409,12 @@ function plateHTML(seat){
   let sub='';
   if(T.mode==='online'){const st=toArr(T.seats)[seat];const on=st&&st.type==='human'?(LOCAL.online&&LOCAL.online.presence&&LOCAL.online.presence[st.uid]?'🟢':'⚪'):'🤖';sub=`<span class="pname">${on} ${esc(playerName(seat))}${seat===MYSEAT?' (jij)':''}</span>`;}
   else sub=seat===MYSEAT?' (jij)':seat===(MYSEAT+2)%4?' (partner)':'';
-  return`<div class="plate ${vul?'vul':''} ${turn?'turn':''}">${SEAT_NAME[seat]}${sub}${dealerOf(T.board)===seat?'<span class="badge" title="Gever">G</span>':''}${role?`<span class="role">${role}</span>`:''}</div>`;
+  return`<div class="plate ${vul?'vul':''} ${turn?'turn':''}">${SEAT_NAME[seat]}${sub}${dealerOf(BP(T))===seat?'<span class="badge" title="Gever">G</span>':''}${role?`<span class="role">${role}</span>`:''}</div>`;
 }
 function render(){safe(()=>{if(!T)return;narrate();renderTop();renderSeats();renderCenter();renderSidebar();renderStepBtn();});}
 function renderTop(){
-  const v=vulOf(T.board);
-  $('tsBoard').textContent=T.board;$('tsDealer').textContent=SEAT_NAME[dealerOf(T.board)];$('tsVul').textContent=v.label;
+  const v=vulOf(BP(T));
+  $('tsBoard').textContent=T.board;$('tsDealer').textContent=SEAT_NAME[dealerOf(BP(T))];$('tsVul').textContent=v.label;
   const ss=toArr(T.session).filter(r=>!r.replay),ns=MYSEAT%2===0;
   $('tsSession').textContent=ss.length?(ss.reduce((a,r)=>a+(ns?r.pct:100-r.pct),0)/ss.length).toFixed(2)+'%':'–';
   const ub=$('btnUser');if(ub)ub.innerHTML=ME.uid==='local'?(CLOUD?'👤 Inloggen':'👤 '+esc(ME.name||'Speler')):'👤 '+esc(ME.name||'Speler');
@@ -1443,7 +1458,7 @@ function fitBidding(el){
   while(g++<30&&fs>8&&(bp.scrollHeight>H+1||bp.scrollWidth>W+1)){fs*=0.94;bp.style.fontSize=fs+'px';}
 }
 function biddingHTML(){
-  const a=toArr(T.auction),dealer=dealerOf(T.board),v=vulOf(T.board);
+  const a=toArr(T.auction),dealer=dealerOf(BP(T)),v=vulOf(BP(T));
   const cells=[];for(let i=0;i<dealer;i++)cells.push('');
   a.forEach(c=>cells.push(colorize(callText(c),true)));
   const over=auctionOver(a);if(!over)cells.push('<span class="qmark">?</span>');
@@ -1458,8 +1473,8 @@ function biddingHTML(){
   return`<div class="bidpanel"><div class="auction"><div class="auction-wrap"><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div></div><div class="bidbox"><div class="bidgrid">${grid}</div><div class="bidact">${actH}</div><div class="bidstatus">${status}</div></div></div>`;
 }
 function renderSidebar(){
-  const v=vulOf(T.board);
-  $('sbBoard').textContent=T.board;$('sbDealer').textContent=SEAT_NAME[dealerOf(T.board)];$('sbVul').textContent=v.label;
+  const v=vulOf(BP(T));
+  $('sbBoard').textContent=T.board;$('sbDealer').textContent=SEAT_NAME[dealerOf(BP(T))];$('sbVul').textContent=v.label;{const sn=$('sbNum');if(sn)sn.textContent=T.dealNum?String(T.dealNum):'–';}
   let turn='-';
   if(T.phase==='bidding')turn=auctionOver(toArr(T.auction))?'-':whoText(T.turn);
   if(T.phase==='play'&&T.play&&!T.play.hold){const ps=psOf(T);turn=whoText(ps.turn)+(isMine(T,ps.turn)&&ps.turn!==MYSEAT?' (jij speelt)':'');}
@@ -1501,10 +1516,10 @@ function updateButtons(){
 function openModal(title,html){$('mTitle').innerHTML=title;$('mBody').innerHTML=html;$('modal').classList.remove('hidden');}
 function closeModal(){$('modal').classList.add('hidden');REVIEW=null;}
 function handLines(h){return[3,2,1,0].map(s=>{const cs=h.filter(c=>c.s===s).sort((a,b)=>b.r-a.r);return`<div>${colorize(sym(s),false)} ${cs.length?cs.map(c=>rankLbl(c.r)).join(' '):'—'}</div>`;}).join('');}
-function diagramHTML(deal,b){
+function diagramHTML(deal,b,bp){bp=bp||b;
   const hb=s=>`<div class="dhand"><div class="nm">${SEAT_NAME[s]} · ${hcpOf(deal[s])} pnt</div>${handLines(deal[s])}</div>`;
-  const v=vulOf(b);
-  return`<div class="diagram"><div style="font-size:.85rem;color:#6b5a2a">Spel ${b}<br>Gever ${SEAT_NAME[dealerOf(b)]}<br>Kwetsbaar: ${v.label}</div>${hb(0)}<div></div>${hb(3)}<div style="text-align:center;font-size:2rem;color:#c9a844">✦</div>${hb(1)}<div></div>${hb(2)}<div></div></div>`;
+  const v=vulOf(bp);
+  return`<div class="diagram"><div style="font-size:.85rem;color:#6b5a2a">Spel ${b}${T&&T.dealNum?`<br>Spelnummer <b>${T.dealNum}</b>`:''}<br>Gever ${SEAT_NAME[dealerOf(bp)]}<br>Kwetsbaar: ${v.label}</div>${hb(0)}<div></div>${hb(3)}<div style="text-align:center;font-size:2rem;color:#c9a844">✦</div>${hb(1)}<div></div>${hb(2)}<div></div></div>`;
 }
 function auctionTableHTML(a,b){
   const dealer=dealerOf(b);const cells=[];for(let i=0;i<dealer;i++)cells.push('');a.forEach(c=>cells.push(colorize(callText(c),false)));
@@ -1517,8 +1532,9 @@ function showResult(){
   const ns=MYSEAT%2===0,sc=ns?r.scoreNS:-r.scoreNS,pct=ns?r.pct:100-r.pct,col=sc>0?'#1e7a3e':sc<0?'#b3261e':'#555';
   const head=r.ct?`${colorize(contractText(r.ct),false)} door ${whoText(r.ct.declarer)} — <b>${resultText(r.ct,r.tricks)}</b> (${r.tricks} slagen)`:'Gepast spel';
   openModal(`Uitslag spel ${r.board}`,`<div style="display:flex;gap:1.5rem;flex-wrap:wrap;align-items:center;justify-content:space-between"><div><div style="font-size:1.25rem">${head}</div><div style="margin-top:.3rem">Jouw score (${ns?'Noord-Zuid':'Oost-West'}): <b style="color:${col};font-size:1.3rem">${sc>0?'+':''}${sc}</b></div></div><div style="text-align:center"><div class="pct" style="color:${pct>=50?'#1e7a3e':'#b3261e'}">${pct.toFixed(2)}%</div><div style="font-size:.85rem;color:#6b5a2a">vergeleken met ${r.field.length} andere tafels</div></div></div>
-${DONATE_URL()&&toArr(T.session).length%6===3?donateBox():''}<h4>Alle handen</h4>${diagramHTML(handsOf(T),r.board)}<h4>Bieding</h4>${auctionTableHTML(toArr(T.auction),r.board)}
+${DONATE_URL()&&toArr(T.session).length%6===3?donateBox():''}<div id="cmpBox"></div><h4>Alle handen</h4>${diagramHTML(handsOf(T),r.board,BP(T))}<h4>Bieding</h4>${auctionTableHTML(toArr(T.auction),BP(T))}
 <div class="mbtns"><button class="btn primary" data-act="next">Volgend spel ▶</button><button class="btn" data-act="review">🔍 Nabespreking slag voor slag</button>${T.mode==='solo'?'<button class="btn" data-act="replay">↺ Speel dit spel opnieuw</button>':''}<button class="btn" data-act="freq">📊 Frequentiestaat</button></div>`);
+  setTimeout(fillCompare,50);
 }
 function showFreq(){
   const r=T&&T.result;let html='';
@@ -1590,10 +1606,10 @@ async function showMyResults(){
   const real=a.filter(x=>!x.replay),avg=real.length?real.reduce((s,x)=>s+(+x.pct||0),0)/real.length:0;
   const solo=real.filter(x=>x.mode==='solo'),onl=real.filter(x=>x.mode==='online');
   const av=l=>l.length?(l.reduce((s,x)=>s+(+x.pct||0),0)/l.length).toFixed(2)+'%':'–';
-  const rows=a.slice(0,100).map(x=>`<tr><td>${new Date(x.ts).toLocaleDateString('nl-NL',{day:'numeric',month:'short'})} ${new Date(x.ts).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'})}</td><td>${x.mode==='online'?'Samen'+(x.table?' ('+esc(x.table)+')':''):'Alleen'}</td><td>${x.board}${x.replay?' (herh.)':''}</td><td>${colorize(x.contract+' '+(x.result||''),false)}</td><td>${x.score>0?'+':''}${x.score}</td><td>${(+x.pct).toFixed(2)}%</td></tr>`).join('');
+  const rows=a.slice(0,100).map(x=>`<tr><td>${new Date(x.ts).toLocaleDateString('nl-NL',{day:'numeric',month:'short'})} ${new Date(x.ts).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'})}</td><td>${x.mode==='online'?'Samen'+(x.table?' ('+esc(x.table)+')':''):'Alleen'}</td><td>${x.board}${x.replay?' (herh.)':''}</td><td>${colorize(x.contract+' '+(x.result||''),false)}</td><td>${x.score>0?'+':''}${x.score}</td><td>${(+x.pct).toFixed(2)}%</td><td>${x.dealNum?`<button class="btn" data-net="replaynum" data-num="${x.dealNum}" title="Speel spelnummer ${x.dealNum} opnieuw">↺ ${x.dealNum}</button>`:''}</td></tr>`).join('');
   openModal(`📈 Mijn resultaten – ${esc(ME.name||'Speler')}`,`<div style="display:flex;gap:2rem;flex-wrap:wrap"><div><div class="pct" style="font-size:2rem">${real.length?avg.toFixed(2)+'%':'–'}</div><div class="ex-note">gemiddeld over ${real.length} spellen</div></div><div>Alleen: <b>${av(solo)}</b> (${solo.length})<br>Samen: <b>${av(onl)}</b> (${onl.length})</div></div>
-${ME.uid==='local'?`<p class="ex-note">Je bent niet ingelogd: deze resultaten staan alleen op dit apparaat.</p>`:`<p class="ex-note">Opgeslagen in je account – zichtbaar op pc én tablet.</p>`}
-<table><thead><tr><th>Datum</th><th>Soort</th><th>Spel</th><th>Contract</th><th>Score</th><th>%</th></tr></thead><tbody>${rows||'<tr><td colspan="6">Nog geen resultaten.</td></tr>'}</tbody></table>`);
+${ME.uid==='local'?`<p class="ex-note">Je bent niet ingelogd: deze resultaten staan alleen op dit apparaat.</p>`:`<p class="ex-note">Opgeslagen in je account – zichtbaar op pc én tablet.</p>`}<p class="ex-note">Met <b>↺</b> speel je een spel opnieuw met precies dezelfde kaarten. Spellen van vóór deze versie hebben nog geen spelnummer.</p>
+<table><thead><tr><th>Datum</th><th>Soort</th><th>Spel</th><th>Contract</th><th>Score</th><th>%</th><th>Opnieuw</th></tr></thead><tbody>${rows||'<tr><td colspan="7">Nog geen resultaten.</td></tr>'}</tbody></table>`);
 }
 
 function rowHTML(seat,cards,availW,sc,legal){
@@ -1824,6 +1840,31 @@ async function adminAct(kind,uid){
   await showAdmin();
 }
 
+
+/* ---------- spelnummers: zelfde spel opnieuw of met anderen ---------- */
+function showNumber(){
+  const cur=T&&T.dealNum?T.dealNum:0,solo=T&&T.mode==='solo';
+  openModal('🔢 Spelnummer',`${cur?`<p>Dit spel heeft nummer <b class="code">${cur}</b>.</p><p class="ex-note">Geef dit nummer aan iemand anders. Die krijgt dan precies dezelfde kaarten, dezelfde gever en dezelfde kwetsbaarheid. Na afloop kunnen jullie je scores vergelijken.</p>`:''}
+${solo?`<h4>Een spelnummer spelen</h4><div class="setrow"><label for="numIn">Spelnummer</label><input id="numIn" class="inp" inputmode="numeric" maxlength="6" placeholder="bijv. 48273" style="min-width:9rem"></div><div class="mbtns"><button class="btn primary" data-net="playnum">▶ Speel dit spel</button></div><p class="ex-note">Een eerder gespeeld spel vind je ook terug in 📈 Mijn resultaten, met de knop ↺.</p>`:'<p class="ex-note">Tijdens samen spelen kun je geen ander spelnummer kiezen. Na afloop kun je dit spel alleen opnieuw spelen via 📈 Mijn resultaten.</p>'}`);
+}
+function playNumber(n,opts){
+  n=parseInt(String(n).replace(/\D/g,''),10);
+  if(!validDealNumber(n)){toast('Dit is geen geldig spelnummer (5 of 6 cijfers).');return;}
+  if(!T||T.mode!=='solo'){toast('Een spelnummer kies je als je alleen speelt.');return;}
+  closeModal();
+  LOCAL.token++;LOCAL.pending=false;LOCAL.stepWaiting=null;LOCAL.autoplay=false;LOCAL.explain='';LOCAL.dummyRevealAt=0;
+  startBoard(T,T.board+1,false,n,opts||{});updateButtons();afterChange();
+  coach('info',`Je speelt nu <b>spelnummer ${n}</b>${opts&&opts.replay?' opnieuw. Na afloop zie je je vorige en je nieuwe score naast elkaar.':'.'}`);
+}
+async function fillCompare(){
+  const box=$('cmpBox');if(!box||!T||!T.dealNum)return;
+  let a=[];try{a=await loadMyResults();}catch(e){}
+  const same=a.filter(x=>x.dealNum===T.dealNum).sort((x,y)=>y.ts-x.ts);
+  if(same.length<2){box.innerHTML='';return;}
+  const d=ts=>new Date(ts).toLocaleDateString('nl-NL',{day:'numeric',month:'short',year:'numeric'});
+  box.innerHTML=`<h4>Dit spel eerder gespeeld</h4><table><thead><tr><th></th><th>Contract</th><th>Score</th><th>%</th></tr></thead><tbody>${same.slice(0,6).map((x,i)=>`<tr class="${i===0?'me':''}"><td>${i===0?'<b>Nu</b>':d(x.ts)}</td><td>${colorize(x.contract+' '+(x.result||''),false)}</td><td>${x.score>0?'+':''}${x.score}</td><td>${(+x.pct).toFixed(2)}%</td></tr>`).join('')}</tbody></table>${(()=>{const diff=(+same[0].pct)-(+same[1].pct);return`<p style="margin-top:.4rem">${diff>0.005?`👏 <b>${diff.toFixed(2)} procentpunt beter</b> dan de vorige keer!`:diff<-0.005?`De vorige keer ging het ${(-diff).toFixed(2)} procentpunt beter. Bekijk de 🔍 Nabespreking om te zien waar het verschil zat.`:'Precies even goed als de vorige keer.'}</p>`;})()}`;
+}
+
 /* ---------- samen spelen ---------- */
 function genCode(){const L='ABCDEFGHJKLMNPRSTUVWXYZ';let s='';for(let i=0;i<4;i++)s+=L[Math.floor(Math.random()*L.length)];return s+'-'+(10+Math.floor(Math.random()*90));}
 function needOnline(){
@@ -1949,6 +1990,8 @@ async function netAction(n,el){
       case'savename':{const v=($('locname').value||'').trim().slice(0,24)||'Speler';ME.name=v;try{localStorage.setItem('hbt-localname',v);}catch(e){}closeModal();render();break;}
       case'results':showMyResults();break;
       case'donate':showDonate();break;
+      case'playnum':playNumber(($('numIn')||{}).value,{});break;
+      case'replaynum':playNumber(el.getAttribute('data-num'),{replay:true});break;
       case'admin':showAdmin();break;
       case'approve':case'reject':case'revoke':await adminAct(n,el.getAttribute('data-uid'));break;
     }
@@ -2041,6 +2084,7 @@ $('btnResults').addEventListener('click',showMyResults);
 $('btnUser').addEventListener('click',()=>showAccount('login'));
 $('stepBtn').addEventListener('click',doStep);
 $('btnDonate').addEventListener('click',showDonate);
+$('btnNumber').addEventListener('click',showNumber);
 $('btnAdmin').addEventListener('click',showAdmin);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'){saveGame();flushCloudSave();}});
 window.addEventListener('pagehide',()=>{saveGame();flushCloudSave();});
