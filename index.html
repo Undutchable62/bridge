@@ -32,7 +32,7 @@ body{overscroll-behavior:none;touch-action:manipulation}
 .fsbtn:hover{filter:brightness(1.15)}
 @media (display-mode:fullscreen){.fsbtn{display:none}}
 #tableWrap{position:relative;min-width:0;min-height:0}
-#table{position:absolute;inset:.6rem;border-radius:2.2rem;background:radial-gradient(ellipse at 50% 42%,#239459 0%,#16703f 52%,#0c4a2c 100%);box-shadow:inset 0 0 0 .45rem #4e3017,inset 0 0 0 .62rem #8a5a2b,inset 0 0 3rem rgba(0,0,0,.45),0 1rem 3rem rgba(0,0,0,.5);display:flex;flex-direction:column;padding:calc(var(--cw)*.1 + .7rem) calc(var(--cw)*.15 + .7rem);overflow:hidden}
+#table{position:absolute;inset:.6rem;border-radius:2.2rem;background:radial-gradient(ellipse at 50% 42%,var(--felt-hi,#239459) 0%,var(--felt,#16703f) 52%,var(--felt-lo,#0c4a2c) 100%);box-shadow:inset 0 0 0 .45rem #4e3017,inset 0 0 0 .62rem #8a5a2b,inset 0 0 3rem rgba(0,0,0,.45),0 1rem 3rem rgba(0,0,0,.5);display:flex;flex-direction:column;padding:calc(var(--cw)*.1 + .7rem) calc(var(--cw)*.15 + .7rem);overflow:hidden}
 #north{height:calc(var(--ch)*2.15);display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:calc(var(--cw)*.06);flex:none}
 #south{height:calc(var(--ch)*1.38);display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:calc(var(--cw)*.06);flex:none}
 #midrow{flex:1;display:flex;min-height:0}
@@ -152,6 +152,13 @@ table.alt tr.ch td{background:rgba(255,213,74,.25);font-weight:700}
 a.btn{text-decoration:none}
 .donate{background:#fff7d6;border:1px solid #e3c96a;border-radius:.7rem;padding:.6rem .8rem;margin:.6rem 0;color:#3a2a00;display:flex;gap:.6rem;align-items:center;flex-wrap:wrap}
 .donate .btn{color:#f6e7b8}
+@keyframes revealIn{from{opacity:0;transform:translateY(-.6rem) scale(.97)}to{opacity:1;transform:none}}
+.reveal{animation:revealIn .8s ease-out both}
+.feltrow{display:flex;gap:.45rem;flex-wrap:wrap;align-items:center}
+.feltsw{width:2.3rem;height:2.3rem;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #b9ad8a;cursor:pointer;padding:0}
+.feltsw.on{box-shadow:0 0 0 3px #c9a844}
+.feltpick{position:relative;width:2.3rem;height:2.3rem;border-radius:50%;border:2px dashed #b9ad8a;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:1.1rem}
+.feltpick input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
 #toast{position:fixed;left:50%;bottom:6vh;transform:translateX(-50%);background:rgba(20,20,20,.9);color:#fff;padding:.6rem 1.1rem;border-radius:.8rem;font-weight:600;opacity:0;transition:opacity .25s;pointer-events:none;z-index:60;font-size:1rem}
 #toast.show{opacity:1}
 @media (max-aspect-ratio:1/1),(max-width:900px){
@@ -648,10 +655,20 @@ function simulateTable(deal,board,rng){
 "use strict";
 (function(){
 const $=id=>document.getElementById(id);
-const DEFAULTS={deck:'knoll',dutchAces:false,backColor:'red',fourColor:false,speed:'normal',favorNS:true,coachAuto:true};
+const DEFAULTS={felt:'#16703f',deck:'knoll',dutchAces:false,backColor:'red',fourColor:false,speed:'normal',favorNS:true,coachAuto:true};
 function loadSettings(){try{const s=JSON.parse(localStorage.getItem('hbt-settings')||'{}');return Object.assign({},DEFAULTS,s);}catch(e){return Object.assign({},DEFAULTS);}}
 function saveSettings(){try{localStorage.setItem('hbt-settings',JSON.stringify(S));}catch(e){}}
 const S=loadSettings();
+/* ---------- kleur van het speellaken ---------- */
+const FELTS=[['Groen (klassiek)','#16703f'],['Blauw','#1d4f8f'],['Petrol','#0f5e63'],['Bordeaux','#7a1f2b'],['Paars','#4b2c6f'],['Bruin','#6b4a2b'],['Antraciet','#3a3f44'],['Zwart','#1b1d1f']];
+function mixHex(hex,to,f){const n=parseInt(hex.slice(1),16);let r=n>>16&255,g=n>>8&255,b=n&255;const t=to==='w'?255:0;r=Math.round(r+(t-r)*f);g=Math.round(g+(t-g)*f);b=Math.round(b+(t-b)*f);return'#'+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);}
+function applyFelt(){
+  let c=String(S.felt||'#16703f');if(!/^#[0-9a-f]{6}$/i.test(c))c='#16703f';
+  const st=document.documentElement.style;
+  st.setProperty('--felt',c);st.setProperty('--felt-hi',mixHex(c,'w',0.18));st.setProperty('--felt-lo',mixHex(c,'b',0.38));
+}
+applyFelt();
+
 const FIELD=24;
 const SPEEDS={slow:{bid:1100,play:1000,trick:1900},normal:{bid:700,play:650,trick:1300},fast:{bid:320,play:300,trick:650}};
 let CW=80,CH=116;
@@ -954,7 +971,8 @@ let T=null;                                   // de tafel
 let ME={uid:'local',name:'Speler',email:''};  // ingelogde speler
 let MYSEAT=2;                                 // eigen plaats (onderaan in beeld)
 let CLOUD=null;                               // online-koppeling (Firebase of testdatabase)
-const LOCAL={pending:false,token:0,autoplay:false,step:false,stepWaiting:null,hintId:null,hintBid:null,adviceAt:-1,explain:'',online:null,silent:false,altCache:{key:'',html:''}};
+const DUMMY_DELAY=2600;
+const LOCAL={dummyRevealAt:0,pending:false,token:0,autoplay:false,step:false,stepWaiting:null,hintId:null,hintBid:null,adviceAt:-1,explain:'',online:null,silent:false,altCache:{key:'',html:''}};
 let SEEN={sig:''};
 
 function safe(fn){try{return fn();}catch(e){console.warn(e);coach('warn','Er ging iets mis, maar het spel gaat door.');}}
@@ -1083,6 +1101,8 @@ function schedule(){
   if(T.phase==='play'){
     if(T.play.hold){if(gate(()=>act({type:'collect',uid:'AI'}),'Slag ophalen'))return;return run(()=>act({type:'collect',uid:'AI'}),delay('trick'));}
     const ps=psOf(T);
+    const wait=LOCAL.dummyRevealAt-Date.now();
+    if(toArr(T.play.plays).length===1&&wait>0)return run(()=>schedule(),wait+80);
     if(controller(T,ps.turn).ai){if(gate(aiPlayNow,`${SEAT_NAME[ps.turn]} speelt`))return;return run(aiPlayNow,delay('play'));}
   }
 }
@@ -1239,8 +1259,9 @@ function narrate(){
     const plays=toArr(T.play.plays);
     if(plays.length>0&&!SEEN.lead){
       SEEN.lead=true;
+      if(!quiet&&plays.length===1){LOCAL.dummyRevealAt=Date.now()+DUMMY_DELAY;setTimeout(()=>{render();schedule();},DUMMY_DELAY+60);}else LOCAL.dummyRevealAt=0;
       if(!quiet){const p=plays[0],ct=T.play.contract,d=ct.declarer,dm=(d+2)%4;
-        coach('info',`${whoText(p.seat)} komt uit met <b>${cardTxt(CARD[p.id])}</b>. De dummy (${SEAT_NAME[dm]}) gaat open op tafel.`);
+        coach('info',`${whoText(p.seat)} komt uit met <b>${cardTxt(CARD[p.id])}</b>. De dummy (${SEAT_NAME[dm]}) gaat zo open op tafel.`);
         if(d%2===MYSEAT%2&&(d===MYSEAT||T.mode==='solo')){const tt=topTricks(handsOf(T),d),need=ct.level+6;
           coach('tip',`Tel je vaste slagen: ongeveer <b>${tt.tot}</b> (${tt.parts.join(', ')||'geen'}). Je hebt er ${need} nodig${tt.tot<need?`; zoek nog ${need-tt.tot} extra via een lange kleur, een snit of introeven.`:'.'}`);}}
     }
@@ -1350,7 +1371,7 @@ function isVisible(seat){
   if(seat===MYSEAT)return true;
   if(T.phase!=='play'||!T.play)return false;
   const ps=psOf(T),d=T.play.contract.declarer,dm=(d+2)%4;
-  if(seat===dm&&ps.dummyVisible)return true;
+  if(seat===dm&&ps.dummyVisible)return Date.now()>=LOCAL.dummyRevealAt;
   if(T.mode==='solo'&&seat===0&&d===0)return true;
   return false;
 }
@@ -1384,6 +1405,7 @@ function renderSeats(){
       el.classList.toggle('wide',vis&&hand.length>0);
       el.innerHTML=plate+(vis?rowsHTML(seat,hand,CW*3.15,midH-CW*0.45,legal):backsCol(hand.length,0.84,midH-CW*0.75))+(hand.length&&!vis?`<div class="count">${hand.length} kaarten</div>`:'');
     }
+    if(vis&&seat!==MYSEAT&&LOCAL.dummyRevealAt&&Date.now()-LOCAL.dummyRevealAt<900){const c=el.querySelector('.cols,.rows');if(c)c.classList.add('reveal');}
   }
 }
 function renderCenter(){
@@ -1719,6 +1741,7 @@ ${reg?`<div class="setrow"><label for="aName">Naam (zichtbaar voor medespelers)<
   $('authForm').addEventListener('submit',async ev=>{ev.preventDefault();const msg=$('authMsg');msg.textContent='Even geduld…';
     try{const email=$('aEmail').value.trim(),pw=$('aPw').value;
       const u=reg?await CLOUD.signUp(($('aName').value||'').trim()||email.split('@')[0],email,pw):await CLOUD.signIn(email,pw);
+      if(reg&&u&&u.name){ME.name=u.name;if(CLOUD&&!ME.approved)CLOUD.set(`requests/${u.uid}`,{name:u.name,email:u.email,ts:Date.now()}).catch(()=>{});if(isAdmin()&&CLOUD)CLOUD.set(`approved/${u.uid}`,{name:u.name,email:u.email,ts:Date.now(),admin:true}).catch(()=>{});render();}
       closeModal();toast(`Welkom ${u.name}!`);}
     catch(e){msg.textContent=authErr(e);}});
 }
@@ -1941,7 +1964,8 @@ function showTips(){
 
 function showSettings(){
   const cfgTxt=(()=>{try{return localStorage.getItem('hbt-fbconfig')||'';}catch(e){return'';}})();
-  openModal('⚙ Instellingen',`<div class="setrow"><label for="sd">Kaartontwerp</label><select id="sd"><option value="knoll" ${S.deck!=='eigen'?'selected':''}>Klassiek (Byron Knoll)</option><option value="eigen" ${S.deck==='eigen'?'selected':''}>Hollandse tekeningen</option></select></div>
+  openModal('⚙ Instellingen',`<div class="setrow" style="flex-wrap:wrap"><label>Kleur speellaken</label><div class="feltrow">${FELTS.map(([n,c])=>`<button class="feltsw ${String(S.felt).toLowerCase()===c?'on':''}" data-set="felt" data-color="${c}" title="${n}" aria-label="${n}" style="background:radial-gradient(circle at 40% 35%,${mixHex(c,'w',0.2)},${c} 60%,${mixHex(c,'b',0.35)})"></button>`).join('')}<label class="feltpick" title="Eigen kleur kiezen">🎨<input type="color" id="feltc" value="${esc(S.felt||'#16703f')}"></label></div></div>
+<div class="setrow"><label for="sd">Kaartontwerp</label><select id="sd"><option value="knoll" ${S.deck!=='eigen'?'selected':''}>Klassiek (Byron Knoll)</option><option value="eigen" ${S.deck==='eigen'?'selected':''}>Hollandse tekeningen</option></select></div>
 <div class="setrow"><label for="sa">Azen met Nederlandse gebouwen</label><input type="checkbox" id="sa" ${S.dutchAces?'checked':''}></div>
 <div class="setrow"><label for="s4">Vierkleurige kaarten (<span style="color:#13723a">♣︎</span> groen, <span style="color:#d9650b">♦︎</span> oranje)</label><input type="checkbox" id="s4" ${S.fourColor?'checked':''}></div>
 <div class="setrow"><label for="sb">Kleur achterkant</label><select id="sb"><option value="red" ${S.backColor!=='blue'?'selected':''}>Rood</option><option value="blue" ${S.backColor==='blue'?'selected':''}>Blauw</option></select></div>
@@ -1955,8 +1979,10 @@ function showSettings(){
 <p style="font-size:.85rem;color:#6b5a2a">Klassieke kaarten: Byron Knoll, <i>Vector Playing Cards</i> (public domain). De instellingen worden in deze browser bewaard.</p>`);
   const upd=()=>{S.fourColor=$('s4').checked;S.coachAuto=$('sc').checked;S.favorNS=$('sf').checked;S.speed=$('ss').value;S.backColor=$('sb').value;S.deck=$('sd').value;S.dutchAces=$('sa').checked;saveSettings();resetCardImages();renderCoach();render();};
   ['sd','sa','s4','sb','sc','sf','ss'].forEach(id=>$(id).addEventListener('change',upd));
+  $('feltc').addEventListener('input',e=>{S.felt=e.target.value;applyFelt();saveSettings();document.querySelectorAll('.feltsw').forEach(b=>b.classList.remove('on'));});
 }
-function setAction(n){
+function setAction(n,el){
+  if(n==='felt'&&el){S.felt=el.getAttribute('data-color');applyFelt();saveSettings();document.querySelectorAll('.feltsw').forEach(b=>b.classList.toggle('on',b===el));const fc=$('feltc');if(fc)fc.value=S.felt;return;}
   if(n==='savecfg'){const v=$('fbcfg').value.trim();if(v&&!parseConfig(v)){toast('Dit lijkt geen geldige firebaseConfig.');return;}try{localStorage.setItem('hbt-fbconfig',v);}catch(e){}flushCloudSave();location.reload();}
   if(n==='clearcfg'){try{localStorage.removeItem('hbt-fbconfig');}catch(e){}location.reload();}
 }
@@ -1970,7 +1996,7 @@ function handleAct(a){
 document.addEventListener('click',e=>{
   const t=e.target;if(!(t instanceof Element))return;
   const ne=t.closest('[data-net]');if(ne){netAction(ne.getAttribute('data-net'),ne);return;}
-  const se=t.closest('[data-set]');if(se){setAction(se.getAttribute('data-set'));return;}
+  const se=t.closest('[data-set]');if(se){setAction(se.getAttribute('data-set'),se);return;}
   const rv=t.closest('[data-rv]');if(rv){reviewNav(rv.getAttribute('data-rv'));return;}
   const ae=t.closest('[data-act]');if(ae){handleAct(ae.getAttribute('data-act'));return;}
   const bb=t.closest('.bidbtn');
