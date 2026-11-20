@@ -1,7 +1,7 @@
 {
-  "name": "De Hollandse Bridgetafel",
-  "short_name": "Bridge",
-  "description": "Bridge spelen en leren met Bridge Coach",
+  "name": "BridgeThuis",
+  "short_name": "BridgeThuis",
+  "description": "Samen bridge leren & spelen, met Bridge Coach",
   "lang": "nl",
   "start_url": "./index.html",
   "scope": "./",
@@ -33,7 +33,7 @@
       "purpose": "any"
     },
     {
-      "src": "icon-512.png",
+      "src": "icon-maskable-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>De Hollandse Bridgetafel</title>
+<title>BridgeThuis</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -24,7 +24,7 @@ body{overscroll-behavior:none;touch-action:manipulation}
 #topbar{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.5rem 1.2rem;background:linear-gradient(#152b22,#0d1c16);border-bottom:1px solid rgba(212,167,44,.35)}
 .brand{font-family:'Playfair Display','PFD',Georgia,serif;font-weight:800;font-size:1.45rem;color:#f6e7b8;letter-spacing:.02em;display:flex;align-items:center;gap:.6rem;white-space:nowrap}
 .brand small{font-family:inherit;font-weight:500;font-size:.72rem;color:#b9c7bd;letter-spacing:.08em;text-transform:uppercase}
-.brand .suits{font-size:1.1rem;letter-spacing:.1em}
+.brand .bmark{width:1.55em;height:1.55em;color:#f6e7b8;flex:none}.brand .bname{font-family:'Nunito',system-ui,sans-serif;font-weight:800;letter-spacing:0}.brand .bthuis{color:#ff8a6e}
 .topstats{display:flex;gap:1.2rem;font-size:.9rem;color:#d7e2da;white-space:nowrap}
 .topstats b{color:#ffe08a}
 .topstats{align-items:center}
@@ -214,7 +214,7 @@ html.bigtext .topstats>span:nth-child(3){display:none}
 
 <div id="app">
   <header id="topbar">
-    <div class="brand"><span class="suits"><span style="color:#f3efe2">♠&#xFE0E;</span><span style="color:#ff6b6b">♥&#xFE0E;</span><span style="color:#ff6b6b">♦&#xFE0E;</span><span style="color:#f3efe2">♣&#xFE0E;</span></span> De Hollandse Bridgetafel <small>Speel · Leer · Bied</small></div>
+    <div class="brand"><svg class="bmark" viewBox="0 0 100 100" aria-hidden="true"><path d="M65 15 Q65 13 67 13 H73 Q75 13 75 15 V32.43 L65 23.86 Z" fill="currentColor"/><path d="M8 47 L50 11 L92 47" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 40 V83 Q19 90 26 90 H74 Q81 90 81 83 V40" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="M50 31 C50 31 25 49 25 62 C25 71.5 33.5 76.5 41.5 72.5 C44 71.2 45.8 69.2 47 67.2 L44.5 90 L55.5 90 L53 67.2 C54.2 69.2 56 71.2 58.5 72.5 C66.5 76.5 75 71.5 75 62 C75 49 50 31 50 31 Z" fill="currentColor"/></svg><span class="bname">Bridge<span class="bthuis">Thuis</span></span> <small>Samen leren &amp; spelen</small></div>
     <div class="topstats"><span>Spel <b id="tsBoard">1</b></span><span>Gever <b id="tsDealer">-</b></span><span>Kwetsbaar <b id="tsVul">-</b></span><span>Sessie <b id="tsSession">–</b></span><button id="btnUser" class="fsbtn" title="Account">👤</button><button id="btnFS" class="fsbtn" title="Volledig scherm (zoals F11)" aria-label="Volledig scherm">⛶ <span class="fslbl">Volledig scherm</span></button></div>
   </header>
   <main id="tableWrap">
@@ -2687,11 +2687,11 @@ function donateBox(){
 function showPending(){
   openModal('⏳ Aanmelding ontvangen',`<p>Bedankt voor je aanmelding, <b>${esc(ME.name)}</b>!</p><p>De beheerder moet je account nog goedkeuren. Dat gebeurt meestal snel. Zodra het zover is, verschijnt hier vanzelf een melding.</p><p>Tot die tijd kun je gewoon <b>alleen spelen</b>. Je spel wordt dan op dit apparaat bewaard. Na de goedkeuring kun je ook op andere apparaten verder en samen spelen.</p>${donateBox()}<div class="mbtns"><button class="btn primary" data-net="close">Alleen spelen</button><button class="btn" data-net="logout">Uitloggen</button></div>`);
 }
-function bunqUrl(amount){const base=DONATE_URL().replace(/\/+$/,'');return amount?`${base}/${amount}/Hollandse%20Bridgetafel`:base;}
+function bunqUrl(amount){const base=DONATE_URL().replace(/\/+$/,'');return amount?`${base}/${amount}/BridgeThuis`:base;}
 function showDonate(){
   if(!DONATE_URL()){toast('Er is nog geen bijdrage-link ingesteld.');return;}
   const amt=a=>`<a class="btn primary" href="${esc(bunqUrl(a))}" target="_blank" rel="noopener">€ ${a.replace('.',',')}</a>`;
-  openModal('☕ Steun De Hollandse Bridgetafel',`<p>De Hollandse Bridgetafel is gratis. Heb je er plezier van, dan kun je met een vrijwillige bijdrage helpen de kosten en het onderhoud te dekken.</p><p>Je betaalt veilig via <b>bunq.me</b>, met iDEAL of een betaalpas. Kies een bedrag:</p><div class="mbtns">${amt('2.50')}${amt('5.00')}${amt('10.00')}<a class="btn" href="${esc(bunqUrl(''))}" target="_blank" rel="noopener">Ander bedrag</a></div><p class="ex-note" style="margin-top:.8rem">De betaalpagina opent in je browser. Daarna kom je met de terugknop of het pictogram weer bij het spel. Dank je wel!</p>`);
+  openModal('☕ Steun BridgeThuis',`<p>BridgeThuis is gratis. Heb je er plezier van, dan kun je met een vrijwillige bijdrage helpen de kosten en het onderhoud te dekken.</p><p>Je betaalt veilig via <b>bunq.me</b>, met iDEAL of een betaalpas. Kies een bedrag:</p><div class="mbtns">${amt('2.50')}${amt('5.00')}${amt('10.00')}<a class="btn" href="${esc(bunqUrl(''))}" target="_blank" rel="noopener">Ander bedrag</a></div><p class="ex-note" style="margin-top:.8rem">De betaalpagina opent in je browser. Daarna kom je met de terugknop of het pictogram weer bij het spel. Dank je wel!</p>`);
 }
 async function showAdmin(){
   if(!isAdmin()){toast('Alleen voor de beheerder.');return;}
@@ -3056,7 +3056,7 @@ if(/^https?:$/.test(location.protocol)){
   ME={uid:lastUid,name:localStorage.getItem('hbt-localname')||'Speler',email:''};
   const local=readLocalSave(lastUid);
   if(local&&validT(local.t))resumeSolo(local.t,`Welkom terug! Je gaat verder met spel ${local.t.board}${local.t.phase==='done'?' (afgelopen)':''}.`);
-  else{coach('info','Welkom aan <b>De Hollandse Bridgetafel</b>! Jij speelt <b>Zuid</b>. De Bridge Coach helpt je bij elk bod; druk op 💡 Hint als je twijfelt. Met 👣 <b>Stap voor stap</b> zie je bij elke zet waarom die gekozen is.');newSolo();}
+  else{coach('info','Welkom bij <b>BridgeThuis</b>! Jij speelt <b>Zuid</b>. De Bridge Coach helpt je bij elk bod; druk op 💡 Hint als je twijfelt. Met 👣 <b>Stap voor stap</b> zie je bij elke zet waarom die gekozen is.');newSolo();}
   // 2. online koppelen (indien ingesteld)
   await initCloud();
   if(CLOUD){
