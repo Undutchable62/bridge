@@ -2,7 +2,7 @@
    Het spel en config.js worden eerst via internet opgehaald (zodat updates direct
    doorkomen; 'no-cache' = altijd even bij de server controleren, ook als de browser
    nog een kopie heeft) en vallen terug op de bewaarde versie als je offline bent. */
-const VERSIE = 'hbt-16';
+const VERSIE = 'hbt-17';
 const BESTANDEN = ['./', './index.html', './config.js', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png', './icon-maskable-512.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSIE).then(c => c.addAll(BESTANDEN.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));

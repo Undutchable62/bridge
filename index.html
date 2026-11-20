@@ -34,7 +34,7 @@ body{overscroll-behavior:none;touch-action:manipulation}
 #tableWrap{position:relative;min-width:0;min-height:0}
 #table{position:absolute;inset:.6rem;border-radius:2.2rem;background:radial-gradient(ellipse at 50% 42%,var(--felt-hi,#239459) 0%,var(--felt,#16703f) 52%,var(--felt-lo,#0c4a2c) 100%);box-shadow:inset 0 0 0 .45rem #4e3017,inset 0 0 0 .62rem #8a5a2b,inset 0 0 3rem rgba(0,0,0,.45),0 1rem 3rem rgba(0,0,0,.5);display:flex;flex-direction:column;padding:calc(var(--cw)*.1 + .7rem) calc(var(--cw)*.15 + .7rem);overflow:hidden}
 #north{height:calc(var(--ch)*2.15);display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:calc(var(--cw)*.06);flex:none}
-#south{height:calc(var(--ch)*1.38);display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:calc(var(--cw)*.06);flex:none}
+#south{position:relative;height:calc(var(--ch)*1.38);display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:calc(var(--cw)*.06);flex:none}
 #midrow{flex:1;display:flex;min-height:0}
 .side{width:calc(var(--cw)*1.6);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:calc(var(--cw)*.08);flex:none;transition:width .3s}
 .side.wide{width:calc(var(--cw)*3.3)}
@@ -180,7 +180,7 @@ html.bigtext .topstats>span:nth-child(3){display:none}
 .alerted{cursor:pointer;border-bottom:2px dotted #e8b33a}
 .alerted sup{font-size:.6em;color:#e8b33a;margin-left:1px}
 .alertb{display:inline-block;background:#e8b33a;color:#2a1d00;border-radius:4px;padding:0 .3em;font-size:.8em;font-weight:700}
-</style>
+.quitrow{position:absolute;bottom:calc(var(--ch)*.04);display:flex;align-items:flex-end;pointer-events:none;z-index:0;transform-origin:left bottom}.quitrow .q{position:relative;flex:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))}.quitrow .q .card{position:absolute;left:0;bottom:0}.quitrow .q.lost .card{top:0;bottom:auto;transform-origin:0 0;transform:rotate(-90deg) translateX(-100%)}</style>
 </head>
 <body>
 <!-- Gedeelde SVG-definities: kleurtekens, patronen, verlopen -->
@@ -214,7 +214,7 @@ html.bigtext .topstats>span:nth-child(3){display:none}
 
 <div id="app">
   <header id="topbar">
-    <div class="brand"><svg class="bmark" viewBox="0 0 100 100" aria-hidden="true"><path d="M65 15 Q65 13 67 13 H73 Q75 13 75 15 V32.43 L65 23.86 Z" fill="currentColor"/><path d="M8 47 L50 11 L92 47" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 40 V83 Q19 90 26 90 H74 Q81 90 81 83 V40" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="M50 31 C50 31 25 49 25 62 C25 71.5 33.5 76.5 41.5 72.5 C44 71.2 45.8 69.2 47 67.2 L44.5 90 L55.5 90 L53 67.2 C54.2 69.2 56 71.2 58.5 72.5 C66.5 76.5 75 71.5 75 62 C75 49 50 31 50 31 Z" fill="currentColor"/></svg><span class="bname">Bridge<span class="bthuis">Thuis</span></span><span class="bver" id="appVer" role="button" tabindex="0" title="Wat is er nieuw?">v0.2.0</span> <small>Samen leren &amp; spelen</small></div>
+    <div class="brand"><svg class="bmark" viewBox="0 0 100 100" aria-hidden="true"><path d="M65 15 Q65 13 67 13 H73 Q75 13 75 15 V32.43 L65 23.86 Z" fill="currentColor"/><path d="M8 47 L50 11 L92 47" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 40 V83 Q19 90 26 90 H74 Q81 90 81 83 V40" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="M50 31 C50 31 25 49 25 62 C25 71.5 33.5 76.5 41.5 72.5 C44 71.2 45.8 69.2 47 67.2 L44.5 90 L55.5 90 L53 67.2 C54.2 69.2 56 71.2 58.5 72.5 C66.5 76.5 75 71.5 75 62 C75 49 50 31 50 31 Z" fill="currentColor"/></svg><span class="bname">Bridge<span class="bthuis">Thuis</span></span><span class="bver" id="appVer" role="button" tabindex="0" title="Wat is er nieuw?">v0.3.0</span> <small>Samen leren &amp; spelen</small></div>
     <div class="topstats"><span>Spel <b id="tsBoard">1</b></span><span>Gever <b id="tsDealer">-</b></span><span>Kwetsbaar <b id="tsVul">-</b></span><span>Sessie <b id="tsSession">–</b></span><button id="btnUser" class="fsbtn" title="Account">👤</button><button id="btnFS" class="fsbtn" title="Volledig scherm (zoals F11)" aria-label="Volledig scherm">⛶ <span class="fslbl">Volledig scherm</span></button></div>
   </header>
   <main id="tableWrap">
@@ -2303,7 +2303,7 @@ function renderSeats(){
   const midH=$('midrow').clientHeight,tableW=$('table').clientWidth-CW*0.6;
   for(let seat=0;seat<4;seat++){
     const slot=slotOf(seat),el=$(SLOT_EL[slot]),hand=handOf(seat),vis=isVisible(seat),legal=playableSet(seat),plate=plateHTML(seat);
-    if(slot===2){el.innerHTML=plate+rowHTML(seat,hand,Math.min(tableW,CW*9.5),1,legal);}
+    if(slot===2){el.innerHTML=plate+rowHTML(seat,hand,Math.min(tableW,CW*9.5),1,legal)+quitHTML(seat);placeQuit(el);}
     else if(slot===0){el.innerHTML=(vis?colsHTML(seat,hand,CH*2.15-CW*0.42,tableW,legal):backsRow(hand.length,0.86))+plate;}
     else{
       el.classList.toggle('wide',vis&&hand.length>0);
@@ -2311,6 +2311,27 @@ function renderSeats(){
     }
     if(vis&&seat!==MYSEAT&&LOCAL.dummyRevealAt&&Date.now()-LOCAL.dummyRevealAt<900){const c=el.querySelector('.cols,.rows');if(c)c.classList.add('reveal');}
   }
+}
+/* ---------- gespeelde slagen wegleggen (alleen je eigen rijtje, zoals aan tafel) ---------- */
+function quitHTML(seat){
+  if(!T||(T.phase!=='play'&&T.phase!=='done'))return'';
+  let ps=null;try{ps=psOf(T);}catch(e){}
+  if(!ps||!ps.history||!ps.history.length)return'';
+  const w=CW*0.5,h=CH*0.5,step=w*0.62;
+  let won=0,lost=0;
+  const cards=ps.history.map((t,i)=>{const ok=t.winner%2===seat%2;ok?won++:lost++;
+    const bw=ok?w:h,bh=ok?h:w,ml=i?`margin-left:${step-bw}px`:'';
+    return`<div class="q ${ok?'won':'lost'}" style="width:${bw}px;height:${bh}px;${ml}">${backHTML(w,h,'')}</div>`;}).join('');
+  return`<div class="quitrow" id="quitRow" title="Jouw gespeelde kaarten: ${won} slag${won===1?'':'en'} gewonnen (rechtop), ${lost} verloren (dwars)">${cards}</div>`;
+}
+function placeQuit(el){
+  const q=el.querySelector('#quitRow'),hd=el.querySelector('.hand');if(!q)return;
+  const W=el.clientWidth,hw=hd?hd.getBoundingClientRect().width:0,qw=q.scrollWidth;
+  const room=(W-hw)/2-CW*0.25;
+  const sc=Math.max(0.55,Math.min(1,room/Math.max(1,qw)));
+  q.style.left=((W+hw)/2+CW*0.15)+'px';
+  q.style.transform=sc<1?`scale(${sc})`:'';
+  if(room<qw*0.55){q.style.left='';q.style.right='0px';q.style.transform='scale(.55)';q.style.transformOrigin='right bottom';q.style.opacity='.85';}
 }
 function renderCenter(){
   const el=$('center');
@@ -2723,8 +2744,9 @@ async function adminAct(kind,uid){
 
 
 /* ---------- versie, "Wat is er nieuw" en feedback ---------- */
-const APP_VERSION='0.2.0';
+const APP_VERSION='0.3.0';
 const CHANGELOG=[
+ {v:'0.3.0',d:'20 november 2026',items:['<b>Gespeelde kaarten wegleggen</b>, zoals aan een echte bridgetafel: na elke slag ligt jouw kaart dicht rechts naast je hand, <b>rechtop</b> als jullie de slag wonnen en <b>dwars</b> als de tegenpartij hem won. Je ziet alleen je eigen rijtje.']},
  {v:'0.2.0',d:'20 november 2026',items:['<b>✉ Feedback</b>: meld een fout, doe een suggestie of stuur een aanmoediging. De gegevens van het spel kunnen automatisch mee.','<b>Wat is er nieuw</b>: dit overzicht. Je opent het door op het versienummer naast de naam te tikken.']},
  {v:'0.1.0',d:'20 november 2026',items:['Nieuwe naam: <b>BridgeThuis</b>, met een eigen adres: <b>bridgethuis.nl</b>.','Nieuw logo en app-pictogram (het witte huisje).','Versienummer in de bovenbalk.']},
  {v:'Eerder',d:'november 2026',items:['Twee niveaus: <b>Beginner</b> en <b>Gevorderd</b> (afspraken zoals Stayman, transfers, Multi en Muiderberg; sterker afspelen en verdedigen).','<b>Spelnummers</b>: speel een spel opnieuw of speel dezelfde kaarten als een vriend.','<b>📈 Mijn resultaten</b>, bewaard in je account op pc én tablet.','<b>👥 Samen spelen</b> met een tafelcode, ieder op een eigen apparaat.','Bridge Coach, Hint, Stap voor stap, Nabespreking en Frequentiestaat.']}
@@ -2959,6 +2981,7 @@ function showTips(){
 <li><b>Vijfkaart hoog:</b> open 1${sym(2)} of 1${sym(3)} alleen met minstens vijf kaarten. Anders open je je langste lage kleur (${sym(1)} of ${sym(0)}).</li>
 <li><b>Antwoorden:</b> heeft partner geopend, dan bied je met 6 of meer punten. Steun partners hoge kleur met drie of meer kaarten.</li>
 <li><b>De manche:</b> met samen <b>25 punten</b> haal je meestal 3SA, 4${sym(2)} of 4${sym(3)}. Voor 5${sym(0)}/5${sym(1)} heb je ca. 29 punten nodig, voor klein slem ca. 33.</li>
+<li><b>Gespeelde kaarten:</b> net als aan een echte bridgetafel leg je je eigen kaart na elke slag dicht vóór je neer: <b>rechtop</b> als jullie de slag wonnen, <b>dwars</b> als de tegenpartij hem won. Zo zie je in één oogopslag hoe het spel loopt. Je ziet alleen je eigen rijtje.</li>
 <li><b>Een fit:</b> acht of meer kaarten samen in één kleur is een goede troefkleur.</li>
 <li><b>Kleur bekennen is verplicht.</b> Heb je de gevraagde kleur niet meer, dan mag je introeven of een andere kaart weggooien.</li>
 <li><b>Uitkomen:</b> kies de kleur van partner, de bovenste kaart van een reeks (H-V-B), of de vierde kaart van boven uit je langste kleur.</li>
