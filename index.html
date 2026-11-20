@@ -24,7 +24,7 @@ body{overscroll-behavior:none;touch-action:manipulation}
 #topbar{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.5rem 1.2rem;background:linear-gradient(#152b22,#0d1c16);border-bottom:1px solid rgba(212,167,44,.35)}
 .brand{font-family:'Playfair Display','PFD',Georgia,serif;font-weight:800;font-size:1.45rem;color:#f6e7b8;letter-spacing:.02em;display:flex;align-items:center;gap:.6rem;white-space:nowrap}
 .brand small{font-family:inherit;font-weight:500;font-size:.72rem;color:#b9c7bd;letter-spacing:.08em;text-transform:uppercase}
-.brand .bmark{width:1.55em;height:1.55em;color:#f6e7b8;flex:none}.brand .bname{font-family:'Nunito',system-ui,sans-serif;font-weight:800;letter-spacing:0}.brand .bthuis{color:#ff8a6e}.brand .bver{font-family:system-ui,sans-serif;font-weight:600;font-size:.62rem;color:#b9c7bd;border:1px solid rgba(185,199,189,.45);border-radius:999px;padding:.08rem .45rem;letter-spacing:.02em;align-self:center}
+.brand .bmark{width:1.55em;height:1.55em;color:#f6e7b8;flex:none}.brand .bname{font-family:'Nunito',system-ui,sans-serif;font-weight:800;letter-spacing:0}.brand .bthuis{color:#ff8a6e}.brand .bver{font-family:system-ui,sans-serif;font-weight:600;font-size:.62rem;color:#b9c7bd;border:1px solid rgba(185,199,189,.45);border-radius:999px;padding:.08rem .45rem;letter-spacing:.02em;align-self:center;cursor:pointer}.brand .bver:hover{color:#f6e7b8;border-color:#f6e7b8}.fbcats{display:flex;gap:.4rem 1.2rem;flex-wrap:wrap;margin:.4rem 0 .8rem}.fbcat{display:inline-flex;align-items:center;gap:.4rem;cursor:pointer}
 .topstats{display:flex;gap:1.2rem;font-size:.9rem;color:#d7e2da;white-space:nowrap}
 .topstats b{color:#ffe08a}
 .topstats{align-items:center}
@@ -214,7 +214,7 @@ html.bigtext .topstats>span:nth-child(3){display:none}
 
 <div id="app">
   <header id="topbar">
-    <div class="brand"><svg class="bmark" viewBox="0 0 100 100" aria-hidden="true"><path d="M65 15 Q65 13 67 13 H73 Q75 13 75 15 V32.43 L65 23.86 Z" fill="currentColor"/><path d="M8 47 L50 11 L92 47" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 40 V83 Q19 90 26 90 H74 Q81 90 81 83 V40" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="M50 31 C50 31 25 49 25 62 C25 71.5 33.5 76.5 41.5 72.5 C44 71.2 45.8 69.2 47 67.2 L44.5 90 L55.5 90 L53 67.2 C54.2 69.2 56 71.2 58.5 72.5 C66.5 76.5 75 71.5 75 62 C75 49 50 31 50 31 Z" fill="currentColor"/></svg><span class="bname">Bridge<span class="bthuis">Thuis</span></span><span class="bver" id="appVer" title="Versie van de app">v0.1.0</span> <small>Samen leren &amp; spelen</small></div>
+    <div class="brand"><svg class="bmark" viewBox="0 0 100 100" aria-hidden="true"><path d="M65 15 Q65 13 67 13 H73 Q75 13 75 15 V32.43 L65 23.86 Z" fill="currentColor"/><path d="M8 47 L50 11 L92 47" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 40 V83 Q19 90 26 90 H74 Q81 90 81 83 V40" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="M50 31 C50 31 25 49 25 62 C25 71.5 33.5 76.5 41.5 72.5 C44 71.2 45.8 69.2 47 67.2 L44.5 90 L55.5 90 L53 67.2 C54.2 69.2 56 71.2 58.5 72.5 C66.5 76.5 75 71.5 75 62 C75 49 50 31 50 31 Z" fill="currentColor"/></svg><span class="bname">Bridge<span class="bthuis">Thuis</span></span><span class="bver" id="appVer" role="button" tabindex="0" title="Wat is er nieuw?">v0.2.0</span> <small>Samen leren &amp; spelen</small></div>
     <div class="topstats"><span>Spel <b id="tsBoard">1</b></span><span>Gever <b id="tsDealer">-</b></span><span>Kwetsbaar <b id="tsVul">-</b></span><span>Sessie <b id="tsSession">–</b></span><button id="btnUser" class="fsbtn" title="Account">👤</button><button id="btnFS" class="fsbtn" title="Volledig scherm (zoals F11)" aria-label="Volledig scherm">⛶ <span class="fslbl">Volledig scherm</span></button></div>
   </header>
   <main id="tableWrap">
@@ -254,6 +254,7 @@ html.bigtext .topstats>span:nth-child(3){display:none}
         <button class="btn" id="btnNumber">🔢 Spelnummer</button>
         <button class="btn" id="btnTips">📘 Bridge-tips</button>
         <button class="btn" id="btnSettings">⚙ Instellingen</button>
+        <button class="btn" id="btnFeedback">✉ Feedback</button>
         <button class="btn" id="btnDonate" style="display:none">☕ Steun deze app</button>
         <button class="btn" id="btnAdmin" style="display:none">🛡 Beheer</button>
       </div>
@@ -2697,6 +2698,7 @@ async function showAdmin(){
   if(!isAdmin()){toast('Alleen voor de beheerder.');return;}
   openModal('🛡 Beheer – spelers','<div id="adminBox"><p>Even laden…</p></div>');
   try{ACCESS.admin={requests:(await CLOUD.get('requests'))||{},approved:(await CLOUD.get('approved'))||{}};}catch(e){$('adminBox').innerHTML=`<p>Kon de gegevens niet ophalen: ${esc(authErr(e))}</p><p class="ex-note">Controleer of de beveiligingsregels uit het stappenplan in Firebase staan, met jouw e-mailadres erin.</p>`;return;}
+  try{ACCESS.admin.feedback=(await CLOUD.get('feedback'))||{};}catch(e){ACCESS.admin.feedback={};ACCESS.admin.fbErr=true;}
   renderAdmin();
 }
 function renderAdmin(){
@@ -2708,7 +2710,7 @@ function renderAdmin(){
   const ok=Object.entries(ap).filter(([uid,r])=>!r.admin).sort((a,b)=>(a[1].name||'').localeCompare(b[1].name||'')).map(([uid,r])=>`<tr><td><b>${esc(r.name||'')}</b><br><span class="ex-note">${esc(r.email||'')}</span></td><td>${d(r.ts)}</td><td><button class="btn" data-net="revoke" data-uid="${esc(uid)}">Toegang intrekken</button></td></tr>`).join('');
   box.innerHTML=`<h4>Wachten op goedkeuring (${Object.keys(req).length})</h4><table><thead><tr><th>Speler</th><th>Aangemeld</th><th></th></tr></thead><tbody>${rq||'<tr><td colspan="3">Geen nieuwe aanmeldingen.</td></tr>'}</tbody></table>
 <h4>Goedgekeurde spelers (${Object.entries(ap).filter(([u,r])=>!r.admin).length})</h4><table><thead><tr><th>Speler</th><th>Sinds</th><th></th></tr></thead><tbody>${ok||'<tr><td colspan="3">Nog niemand goedgekeurd.</td></tr>'}</tbody></table>
-<p class="ex-note" style="margin-top:.8rem">Weigeren verwijdert alleen de aanmelding; die persoon kan wel alleen blijven spelen op het eigen apparaat. Toegang intrekken stopt het bewaren in het account en het samen spelen.</p>`;
+<p class="ex-note" style="margin-top:.8rem">Weigeren verwijdert alleen de aanmelding; die persoon kan wel alleen blijven spelen op het eigen apparaat. Toegang intrekken stopt het bewaren in het account en het samen spelen.</p>`+(ACCESS.admin.fbErr?'<h4>Feedback</h4><p class="ex-note">Feedback kon niet worden opgehaald. Staat de regel voor <code>feedback</code> in de beveiligingsregels?</p>':adminFeedbackHTML());
 }
 async function adminAct(kind,uid){
   if(!isAdmin()||!uid)return;
@@ -2719,6 +2721,72 @@ async function adminAct(kind,uid){
   await showAdmin();
 }
 
+
+/* ---------- versie, "Wat is er nieuw" en feedback ---------- */
+const APP_VERSION='0.2.0';
+const CHANGELOG=[
+ {v:'0.2.0',d:'20 november 2026',items:['<b>✉ Feedback</b>: meld een fout, doe een suggestie of stuur een aanmoediging. De gegevens van het spel kunnen automatisch mee.','<b>Wat is er nieuw</b>: dit overzicht. Je opent het door op het versienummer naast de naam te tikken.']},
+ {v:'0.1.0',d:'20 november 2026',items:['Nieuwe naam: <b>BridgeThuis</b>, met een eigen adres: <b>bridgethuis.nl</b>.','Nieuw logo en app-pictogram (het witte huisje).','Versienummer in de bovenbalk.']},
+ {v:'Eerder',d:'november 2026',items:['Twee niveaus: <b>Beginner</b> en <b>Gevorderd</b> (afspraken zoals Stayman, transfers, Multi en Muiderberg; sterker afspelen en verdedigen).','<b>Spelnummers</b>: speel een spel opnieuw of speel dezelfde kaarten als een vriend.','<b>📈 Mijn resultaten</b>, bewaard in je account op pc én tablet.','<b>👥 Samen spelen</b> met een tafelcode, ieder op een eigen apparaat.','Bridge Coach, Hint, Stap voor stap, Nabespreking en Frequentiestaat.']}
+];
+function showWhatsNew(){
+  openModal('🆕 Wat is er nieuw',CHANGELOG.map(c=>`<h4>${c.v==='Eerder'?'Eerder':'Versie '+esc(c.v)} <span class="ex-note" style="font-weight:400">· ${esc(c.d)}</span></h4><ul class="tips">${c.items.map(i=>`<li>${i}</li>`).join('')}</ul>`).join('')+`<p class="ex-note" style="margin-top:.8rem">Iets gevonden of een idee? Gebruik <b>✉ Feedback</b>.</p><div class="mbtns"><button class="btn primary" data-net="feedback">✉ Feedback geven</button><button class="btn" data-net="close">Sluiten</button></div>`);
+  try{localStorage.setItem('hbt-seenver',APP_VERSION);}catch(e){}
+}
+function checkWhatsNew(){
+  let seen=null;try{seen=localStorage.getItem('hbt-seenver');}catch(e){}
+  if(seen===APP_VERSION)return;
+  const anyPlayed=(()=>{try{for(let i=0;i<localStorage.length;i++){if((localStorage.key(i)||'').startsWith('hbt-save'))return true;}}catch(e){}return false;})();
+  if(!anyPlayed){try{localStorage.setItem('hbt-seenver',APP_VERSION);}catch(e){}return;}
+  setTimeout(()=>{if($('modal').classList.contains('hidden'))showWhatsNew();},1500);
+}
+const FB_CATS={bug:'🐞 Foutmelding',idea:'💡 Suggestie',cheer:'👏 Aanmoediging'};
+const FB_MAIL='info@bridgethuis.nl';
+function fbContext(){
+  const c={versie:APP_VERSION,apparaat:(navigator.userAgent||'').slice(0,160),scherm:`${innerWidth}×${innerHeight}`};
+  if(T){c.spel=T.board;if(T.dealNum)c.spelnummer=T.dealNum;c.niveau=T.level==='adv'?'Gevorderd':'Beginner';c.fase={bidding:'bieden',play:'spelen',done:'afgelopen'}[T.phase]||T.phase;c.soort=T.mode==='online'?'samen':'alleen';
+    try{if(T.play&&T.play.contract)c.contract=contractText(T.play.contract);}catch(e){}
+    try{if(T.play&&T.play.plays)c.slag=Math.floor(T.play.plays.length/4)+1;}catch(e){}}
+  return c;
+}
+function fbCtxText(c){return Object.entries(c).map(([k,v])=>`${k}: ${v}`).join('\n');}
+function showFeedback(cat){
+  cat=FB_CATS[cat]?cat:'bug';
+  const c=fbContext();
+  const radios=Object.entries(FB_CATS).map(([k,l])=>`<label class="fbcat"><input type="radio" name="fbCat" value="${k}" ${k===cat?'checked':''}> ${l}</label>`).join('');
+  const viaCloud=!!(CLOUD&&ME.uid!=='local');
+  openModal('✉ Feedback',`<p>Fijn dat je meedenkt! Kies wat voor bericht het is en vertel het in je eigen woorden.</p>
+<div class="fbcats">${radios}</div>
+<div class="setrow" style="display:block"><label for="fbText" style="display:block;margin-bottom:.3rem">Je bericht</label><textarea id="fbText" class="inp" rows="5" maxlength="2000" style="width:100%;min-width:0;box-sizing:border-box" placeholder="Bijvoorbeeld: bij spel 7 kon ik geen kaart kiezen nadat…"></textarea></div>
+<label class="fbcat"><input type="checkbox" id="fbCtx" checked> Gegevens van dit spel meesturen <span class="ex-note">(spelnummer, niveau, contract, versie, apparaat)</span></label>
+<details class="ex-note" style="margin:.3rem 0 0 1.6rem"><summary>Wat wordt er meegestuurd?</summary><pre style="white-space:pre-wrap;font-size:.8em;margin:.3rem 0">${esc(fbCtxText(c))}</pre></details>
+<p id="fbMsg" class="ex-note" style="min-height:1.2em"></p>
+<div class="mbtns"><button class="btn primary" data-net="fbsend">${viaCloud?'Versturen':'✉ Versturen per e-mail'}</button><button class="btn" data-net="close">Annuleren</button></div>
+${viaCloud?`<p class="ex-note">Je bericht gaat met je naam (${esc(ME.name)}) naar Martin. Liever mailen? <a href="mailto:${FB_MAIL}">${FB_MAIL}</a></p>`:`<p class="ex-note">Je bent niet ingelogd. Je mailprogramma opent met je bericht erin; je verstuurt het daar zelf naar ${FB_MAIL}.</p>`}`);
+  setTimeout(()=>{const t=$('fbText');if(t)t.focus();},50);
+}
+async function sendFeedback(){
+  const text=(($('fbText')||{}).value||'').trim();
+  const r=document.querySelector('input[name="fbCat"]:checked');const cat=r?r.value:'bug';
+  if(text.length<3){$('fbMsg').style.color='#b3202a';$('fbMsg').textContent='Typ eerst je bericht.';return;}
+  const ctx=($('fbCtx')||{}).checked?fbContext():{versie:APP_VERSION};
+  if(CLOUD&&ME.uid!=='local'){
+    $('fbMsg').style.color='';$('fbMsg').textContent='Versturen…';
+    try{await CLOUD.push('feedback',{cat,text:text.slice(0,2000),uid:ME.uid,name:ME.name||'',email:ME.email||'',ts:Date.now(),ctx});closeModal();toast('Bedankt! Je bericht is verstuurd.');return;}
+    catch(e){console.warn(e);$('fbMsg').style.color='#b3202a';$('fbMsg').innerHTML=`Versturen lukte niet. <a href="${esc(fbMailto(cat,text,ctx))}">Stuur het per e-mail</a>.`;return;}
+  }
+  location.href=fbMailto(cat,text,ctx);closeModal();
+}
+function fbMailto(cat,text,ctx){
+  const subj=`BridgeThuis – ${FB_CATS[cat].replace(/^\S+\s/,'')}`;
+  return`mailto:${FB_MAIL}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(text+'\n\n---\n'+fbCtxText(ctx))}`;
+}
+function adminFeedbackHTML(){
+  const F=(ACCESS.admin&&ACCESS.admin.feedback)||{};
+  const d=ts=>new Date(ts).toLocaleString('nl-NL',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+  const rows=Object.entries(F).sort((a,b)=>(b[1].ts||0)-(a[1].ts||0)).map(([id,f])=>`<tr><td>${FB_CATS[f.cat]||esc(f.cat||'')}<br><span class="ex-note">${d(f.ts||0)}</span></td><td><b>${esc(f.name||'')}</b> <span class="ex-note">${esc(f.email||'')}</span><div style="white-space:pre-wrap;margin:.2rem 0">${esc(f.text||'')}</div>${f.ctx?`<details class="ex-note"><summary>Spelgegevens</summary><pre style="white-space:pre-wrap;font-size:.8em;margin:.2rem 0">${esc(fbCtxText(f.ctx))}</pre></details>`:''}</td><td><button class="btn" data-net="fbdel" data-id="${esc(id)}">Afgehandeld</button></td></tr>`).join('');
+  return`<h4>Feedback (${Object.keys(F).length})</h4><table><thead><tr><th>Soort</th><th>Bericht</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="3">Geen berichten.</td></tr>'}</tbody></table><p class="ex-note">Afgehandeld verwijdert het bericht uit de lijst.</p>`;
+}
 
 /* ---------- spelnummers: zelfde spel opnieuw of met anderen ---------- */
 function showNumber(){
@@ -2872,6 +2940,10 @@ async function netAction(n,el){
       case'playnum':playNumber(($('numIn')||{}).value,{});break;
       case'replaynum':playNumber(el.getAttribute('data-num'),{replay:true});break;
       case'admin':showAdmin();break;
+      case'feedback':showFeedback();break;
+      case'fbsend':await sendFeedback();break;
+      case'whatsnew':showWhatsNew();break;
+      case'fbdel':{if(!isAdmin())break;await CLOUD.remove(`feedback/${el.getAttribute('data-id')}`);delete ACCESS.admin.feedback[el.getAttribute('data-id')];renderAdmin();break;}
       case'approve':case'reject':case'revoke':await adminAct(n,el.getAttribute('data-uid'));break;
     }
   }catch(e){console.warn(e);toast('Dat lukte niet: '+authErr(e));}
@@ -2998,6 +3070,10 @@ $('stepBtn').addEventListener('click',doStep);
 $('btnDonate').addEventListener('click',showDonate);
 $('btnNumber').addEventListener('click',showNumber);
 $('btnAdmin').addEventListener('click',showAdmin);
+$('btnFeedback').addEventListener('click',()=>showFeedback());
+$('appVer').addEventListener('click',showWhatsNew);
+$('appVer').textContent='v'+APP_VERSION;
+checkWhatsNew();
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'){saveGame();flushCloudSave();}});
 window.addEventListener('pagehide',()=>{saveGame();flushCloudSave();});
 /* ---------- maten ---------- */

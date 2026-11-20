@@ -1,7 +1,7 @@
 /* Offline-ondersteuning voor BridgeThuis.
    Het spel en config.js worden eerst via internet opgehaald (zodat updates direct
    doorkomen) en vallen terug op de bewaarde versie als je offline bent. */
-const VERSIE = 'hbt-14';
+const VERSIE = 'hbt-15';
 const BESTANDEN = ['./', './index.html', './config.js', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png', './icon-maskable-512.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSIE).then(c => c.addAll(BESTANDEN)).then(() => self.skipWaiting()));
