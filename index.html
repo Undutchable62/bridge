@@ -24,7 +24,7 @@ body{overscroll-behavior:none;touch-action:manipulation}
 #topbar{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.5rem 1.2rem;background:linear-gradient(#152b22,#0d1c16);border-bottom:1px solid rgba(212,167,44,.35)}
 .brand{font-family:'Playfair Display','PFD',Georgia,serif;font-weight:800;font-size:1.45rem;color:#f6e7b8;letter-spacing:.02em;display:flex;align-items:center;gap:.6rem;white-space:nowrap}
 .brand small{font-family:inherit;font-weight:500;font-size:.72rem;color:#b9c7bd;letter-spacing:.08em;text-transform:uppercase}
-.brand .bmark{width:1.55em;height:1.55em;color:#f6e7b8;flex:none}.brand .bname{font-family:'Nunito',system-ui,sans-serif;font-weight:800;letter-spacing:0}.brand .bthuis{color:#ff8a6e}
+.brand .bmark{width:1.55em;height:1.55em;color:#f6e7b8;flex:none}.brand .bname{font-family:'Nunito',system-ui,sans-serif;font-weight:800;letter-spacing:0}.brand .bthuis{color:#ff8a6e}.brand .bver{font-family:system-ui,sans-serif;font-weight:600;font-size:.62rem;color:#b9c7bd;border:1px solid rgba(185,199,189,.45);border-radius:999px;padding:.08rem .45rem;letter-spacing:.02em;align-self:center}
 .topstats{display:flex;gap:1.2rem;font-size:.9rem;color:#d7e2da;white-space:nowrap}
 .topstats b{color:#ffe08a}
 .topstats{align-items:center}
@@ -214,7 +214,7 @@ html.bigtext .topstats>span:nth-child(3){display:none}
 
 <div id="app">
   <header id="topbar">
-    <div class="brand"><svg class="bmark" viewBox="0 0 100 100" aria-hidden="true"><path d="M65 15 Q65 13 67 13 H73 Q75 13 75 15 V32.43 L65 23.86 Z" fill="currentColor"/><path d="M8 47 L50 11 L92 47" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 40 V83 Q19 90 26 90 H74 Q81 90 81 83 V40" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="M50 31 C50 31 25 49 25 62 C25 71.5 33.5 76.5 41.5 72.5 C44 71.2 45.8 69.2 47 67.2 L44.5 90 L55.5 90 L53 67.2 C54.2 69.2 56 71.2 58.5 72.5 C66.5 76.5 75 71.5 75 62 C75 49 50 31 50 31 Z" fill="currentColor"/></svg><span class="bname">Bridge<span class="bthuis">Thuis</span></span> <small>Samen leren &amp; spelen</small></div>
+    <div class="brand"><svg class="bmark" viewBox="0 0 100 100" aria-hidden="true"><path d="M65 15 Q65 13 67 13 H73 Q75 13 75 15 V32.43 L65 23.86 Z" fill="currentColor"/><path d="M8 47 L50 11 L92 47" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 40 V83 Q19 90 26 90 H74 Q81 90 81 83 V40" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="M50 31 C50 31 25 49 25 62 C25 71.5 33.5 76.5 41.5 72.5 C44 71.2 45.8 69.2 47 67.2 L44.5 90 L55.5 90 L53 67.2 C54.2 69.2 56 71.2 58.5 72.5 C66.5 76.5 75 71.5 75 62 C75 49 50 31 50 31 Z" fill="currentColor"/></svg><span class="bname">Bridge<span class="bthuis">Thuis</span></span><span class="bver" id="appVer" title="Versie van de app">v0.1.0</span> <small>Samen leren &amp; spelen</small></div>
     <div class="topstats"><span>Spel <b id="tsBoard">1</b></span><span>Gever <b id="tsDealer">-</b></span><span>Kwetsbaar <b id="tsVul">-</b></span><span>Sessie <b id="tsSession">–</b></span><button id="btnUser" class="fsbtn" title="Account">👤</button><button id="btnFS" class="fsbtn" title="Volledig scherm (zoals F11)" aria-label="Volledig scherm">⛶ <span class="fslbl">Volledig scherm</span></button></div>
   </header>
   <main id="tableWrap">
